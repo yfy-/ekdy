@@ -33,8 +33,4 @@ pub fn main() !void {
 
     // try decoder.writer.flush();
     try stdout.flush();
-
-    for (extractor.stack.items) |tag| {
-	std.debug.print("{s}\n", .{tag});
-    }
 }
