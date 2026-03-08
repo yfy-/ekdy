@@ -21,7 +21,7 @@ pub fn main() !void {
     const stdout = &stdout_writer.interface;
 
     var decoder = ekdy.decoding.EntityDecoder.init(stdout);
-    var extractor = ekdy.html.TextExtractor{};
+    var extractor = try ekdy.html.TextExtractor.init(allocator);
     defer extractor.deinit(allocator);
 
     while (stdin.fillMore()) {
@@ -31,6 +31,6 @@ pub fn main() !void {
 	try extractor.convert(allocator, chunk, &decoder.writer);
     } else |err| if (err == error.ReadFailed) return err;
 
-    // try decoder.writer.flush();
-    try stdout.flush();
+    try extractor.eos(&decoder.writer);
+    try decoder.writer.flush();
 }

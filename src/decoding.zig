@@ -26,6 +26,7 @@ pub const EntityDecoder = struct {
     numeric_entity: u21 = 0,
     out_writer: *Writer,
     named_entity: [31]u8 = undefined,
+    hex_char: ?u8 = null,
     writer: Writer,
 
     pub fn init(out_writer: *Writer) Self {
@@ -55,14 +56,50 @@ pub const EntityDecoder = struct {
         return written;
     }
 
+    fn flush(w: *Writer) Writer.Error!void {
+        const self: *Self = @fieldParentPtr("writer", w);
+        try w.defaultFlush();
+
+        // Just output the remaining if we stop at an invalid state.
+        switch (self.state) {
+            .entity_begin => {
+                try self.out_writer.writeByte('&');
+            },
+            .numeric_begin => {
+                _ = try self.out_writer.write("&#");
+            },
+            .hex_begin => {
+                _ = try self.out_writer.print("&#{c}", .{self.hex_char.?});
+            },
+            .entity_decimal => {
+                try self.out_writer.print("&#{d}", .{self.numeric_entity});
+            },
+            .entity_hex => {
+                try self.out_writer.print("&#{c}{x}", .{
+                    self.hex_char.?,
+                    self.numeric_entity,
+                });
+            },
+            .entity_named => {
+                try self.out_writer.print("&{s}", .{
+                    self.named_entity[0..self.named_entity_len],
+                });
+            },
+            .text => {},
+        }
+        try self.out_writer.flush();
+    }
+
     const vtable: Writer.VTable = .{
         .drain = drain,
+        .flush = flush,
     };
 
     fn transition_to_text(self: *Self) void {
         self.state = .text;
         self.named_entity_len = 0;
         self.numeric_entity = 0;
+	self.hex_char = null;
     }
 
     fn numeric_codepoint(self: *Self) u21 {
@@ -104,7 +141,10 @@ pub const EntityDecoder = struct {
                             try self.out_writer.writeAll("&#;");
                             self.transition_to_text();
                         },
-                        'x', 'X' => self.state = .hex_begin,
+                        'x', 'X' => {
+			    self.hex_char = c;
+			    self.state = .hex_begin;
+			},
                         '0'...'9' => {
                             self.numeric_entity = std.fmt.charToDigit(
                                 c,
@@ -121,7 +161,7 @@ pub const EntityDecoder = struct {
                 .hex_begin => {
                     switch (c) {
                         ';' => {
-                            try self.out_writer.writeAll("&#x;");
+                            try self.out_writer.print("&#{c};", .{self.hex_char.?});
                             self.transition_to_text();
                         },
                         '0'...'9', 'a'...'f', 'A'...'F' => {
@@ -132,7 +172,7 @@ pub const EntityDecoder = struct {
                             self.state = .entity_hex;
                         },
                         else => {
-                            try self.out_writer.print("&#x{c}", .{c});
+                            try self.out_writer.print("&#{c}{c}", .{self.hex_char.?, c});
                             self.transition_to_text();
                         },
                     }
@@ -194,7 +234,7 @@ pub const EntityDecoder = struct {
                         }
                         self.transition_to_text();
                     } else if (self.named_entity_len == 31) {
-                        try self.out_writer.print("&{s}{c}", .{ent_name, c});
+                        try self.out_writer.print("&{s}{c}", .{ ent_name, c });
                         self.transition_to_text();
                     } else {
                         self.named_entity[self.named_entity_len] = c;

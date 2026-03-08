@@ -198,7 +198,7 @@ pub const Whitespace = enum(u2) {
 pub const TagProperty = struct {
     is_void: bool = false,
     is_ignore: bool = false,
-    is_raw_text: bool = false,
+    is_rawtext: bool = false,
     whitespace: ?Whitespace = null,
 };
 
@@ -224,24 +224,23 @@ pub const tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.{}, .{
     .fencedframe = .{ .is_ignore = true },
     .frameset = .{ .is_ignore = true },
     .head = .{ .is_ignore = true },
-    .iframe = .{ .is_ignore = true, .is_raw_text = true },
+    .iframe = .{ .is_ignore = true, .is_rawtext = true },
     .map = .{ .is_ignore = true },
     .math = .{ .is_ignore = true },
-    .noembed = .{ .is_ignore = true, .is_raw_text = true },
-    .noframes = .{ .is_ignore = true, .is_raw_text = true },
-    .noscript = .{ .is_ignore = true, .is_raw_text = true },
+    .noembed = .{ .is_ignore = true, .is_rawtext = true },
+    .noframes = .{ .is_ignore = true, .is_rawtext = true },
+    .noscript = .{ .is_ignore = true, .is_rawtext = true },
     .object = .{ .is_ignore = true },
     .picture = .{ .is_ignore = true },
-    .script = .{ .is_ignore = true, .is_raw_text = true },
-    .style = .{ .is_ignore = true, .is_raw_text = true },
+    .script = .{ .is_ignore = true, .is_rawtext = true },
+    .style = .{ .is_ignore = true, .is_rawtext = true },
     .svg = .{ .is_ignore = true },
     .template = .{ .is_ignore = true },
     .video = .{ .is_ignore = true },
-    .plaintext = .{ .is_raw_text = true },
-    .textarea = .{ .is_raw_text = true },
-    .title = .{ .is_raw_text = true },
-    .xmp = .{ .is_raw_text = true },
-    .body = .{ .whitespace = .single_break },
+    .plaintext = .{ .is_rawtext = true, .is_void = true },
+    .textarea = .{ .is_rawtext = true },
+    .title = .{ .is_rawtext = true },
+    .xmp = .{ .is_rawtext = true },
     .caption = .{ .whitespace = .single_break },
     .colgroup = .{ .whitespace = .single_break },
     .datalist = .{ .whitespace = .single_break },
@@ -253,7 +252,6 @@ pub const tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.{}, .{
     .footer = .{ .whitespace = .single_break },
     .form = .{ .whitespace = .single_break },
     .header = .{ .whitespace = .single_break },
-    .html = .{ .whitespace = .single_break },
     .legend = .{ .whitespace = .single_break },
     .li = .{ .whitespace = .single_break },
     .menu = .{ .whitespace = .single_break },
@@ -305,14 +303,17 @@ pub const tag_to_enum = std.StaticStringMap(Tag).initComptime(blk: {
     break :blk init_vals;
 });
 
+pub fn is_valid_fs_tag_char(c: u8) bool {
+    return ascii.isAlphabetic(c) or c == '!' or c == '?' or c == '/';
+}
+
 pub const TextExtractor = struct {
     const Self = @This();
 
     stack: ArrayList(Tag) = ArrayList(Tag){},
 
     // Buffer for current tag.
-    tag_buffer: []const u8 = &.{},
-    // tag_buffer: ArrayList(u8),
+    tag_buffer: ArrayList(u8),
 
     // Whitespace type to emit.
     pending_whitespace: ?Whitespace = null,
@@ -344,12 +345,21 @@ pub const TextExtractor = struct {
         attr_key,
         attr_val,
         comment,
+	plaintext,
     };
+
+    pub fn init(allocator: Allocator) !Self {
+        return Self{ .tag_buffer = try std.ArrayList(u8).initCapacity(allocator, 32) };
+    }
 
     pub fn deinit(self: *Self, allocator: Allocator) void {
         self.stack.deinit(allocator);
+        self.tag_buffer.deinit(allocator);
     }
 
+    /// Convert a chunk of html to text.
+    /// Can be repeteadly called for consecutive html chunks.
+    /// When all the chunks are transformed eos must be called.
     pub fn convert(
         self: *Self,
         allocator: Allocator,
@@ -357,43 +367,61 @@ pub const TextExtractor = struct {
         writer: *std.io.Writer,
     ) !void {
         while (self.cursor < html.len) {
-	    const curr_html = html[self.cursor..];
+            const curr_html = html[self.cursor..];
             self.cursor += try switch (self.state) {
-                .text => self.handleText(curr_html, writer),
+                .text => self.handleText(allocator, curr_html, writer),
                 .tag => self.handleTag(curr_html, writer),
                 .tag_start => self.handleTagStart(allocator, curr_html),
                 .tag_start_found => self.handleTagStartFound(curr_html, writer),
-                .tag_end => self.handleTagEnd(curr_html),
+                .tag_end => self.handleTagEnd(allocator, curr_html),
                 .tag_end_found => self.handleTagEndFound(curr_html),
                 .attr_key => self.handleAttrKey(curr_html),
                 .attr_val => self.handleAttrVal(curr_html),
                 .comment => self.handleComment(curr_html),
+		.plaintext => self.handlePlaintext(curr_html, writer),
             };
         }
-	self.cursor -= html.len;
+        self.cursor -= html.len;
+    }
+
+    /// Writes any text remaining. Should be called after all html
+    /// chunks are processed with convert.
+    pub fn eos(self: *Self, writer: *std.io.Writer) !void {
+        if (self.state == .tag) try writer.writeByte('<');
     }
 
     //<p>ekdy...</p>
     //   ^~~~~~~
-    fn handleText(self: *Self, html: []const u8, writer: *std.io.Writer) Error!usize {
+    fn handleText(
+        self: *Self,
+        allocator: Allocator,
+        html: []const u8,
+        writer: *std.io.Writer,
+    ) Error!usize {
         const c = html[0];
         const tag = self.stack.getLastOrNull();
         const tag_prop = if (tag) |t| tag_properties.get(t) else null;
 
         if (c == '<') {
-            if (tag == null or !tag_prop.?.is_raw_text) {
+            if (tag == null or !tag_prop.?.is_rawtext) {
                 self.state = State.tag;
                 return 1;
             }
 
+	    // Rawtext state handled here.
             const tag_str = @tagName(tag.?);
             const tag_end_size = tag_str.len + 2;
-            if (html.len >= tag_end_size and html[1] == '/' and
-                tag.? == tag_from_str(html[2..tag_end_size]))
-            {
-                self.tag_buffer = tag_str;
-                self.state = State.tag_end_found;
-                return tag_end_size;
+            if (html.len >= tag_end_size and html[1] == '/') {
+                const case_ins_tag = try std.ascii.allocLowerString(
+                    allocator,
+                    html[2..tag_end_size],
+                );
+                defer allocator.free(case_ins_tag);
+                if (tag.? == tag_from_str(case_ins_tag)) {
+                    try self.tag_buffer.appendSlice(allocator, tag_str);
+                    self.state = State.tag_end_found;
+                    return tag_end_size;
+                }
             }
         }
 
@@ -427,13 +455,13 @@ pub const TextExtractor = struct {
     }
 
     //<p>ekdy...</p>
-    //^
+    // ^
     //
     //<p>ekdy...</p>
-    //          ^
+    //           ^
     fn handleTag(self: *Self, html: []const u8, writer: *std.io.Writer) Error!usize {
         const c = html[0];
-        if (ascii.isWhitespace(c)) {
+        if (!is_valid_fs_tag_char(c)) {
             try writer.print("<{c}", .{c});
             self.state = State.text;
             return 1;
@@ -454,23 +482,22 @@ pub const TextExtractor = struct {
         const c = html[0];
         // Handle comments below
         if (html.len > 2 and std.mem.eql(u8, html[0..3], "!--")) {
-            self.tag_buffer.len = 0;
+            self.tag_buffer.clearRetainingCapacity();
             self.state = State.comment;
-            return 3;
+
+            // Do not consume all 3, because it can abruptly finish
+            // with: <!-->
+            return 1;
         }
 
         if (ascii.isWhitespace(c) or c == '>' or c == '/') {
-            try self.stack.append(allocator, tag_from_str(self.tag_buffer));
-            self.tag_buffer.len = 0;
+            try self.stack.append(allocator, tag_from_str(self.tag_buffer.items));
+            self.tag_buffer.clearRetainingCapacity();
             self.state = State.tag_start_found;
             return if (ascii.isWhitespace(c)) 1 else 0;
         }
 
-        if (self.tag_buffer.len == 0) {
-            self.tag_buffer.ptr = html.ptr;
-        }
-
-        self.tag_buffer.len += 1;
+        try self.tag_buffer.append(allocator, ascii.toLower(c));
         return 1;
     }
 
@@ -525,22 +552,18 @@ pub const TextExtractor = struct {
 
     //<strong >ekdy...</strong>
     //                 ^
-    fn handleTagEnd(self: *Self, html: []const u8) Error!usize {
+    fn handleTagEnd(self: *Self, allocator: Allocator, html: []const u8) Error!usize {
         const c = html[0];
         if (ascii.isWhitespace(c) or c == '>') {
             self.state = State.tag_end_found;
             return if (c == '>') 0 else 1;
         }
 
-        if (self.tag_buffer.len == 0) {
-            self.tag_buffer.ptr = html.ptr;
-        }
-
-        self.tag_buffer.len += 1;
+        try self.tag_buffer.append(allocator, ascii.toLower(c));
         return 1;
     }
 
-    fn handleUnmatchedTag(self: *Self, end_tag: Tag) void {
+    fn popMatching(self: *Self, end_tag: Tag) void {
         var found_idx = self.stack.items.len;
         while (found_idx > 0) : (found_idx -= 1) {
             if (end_tag == self.stack.items[found_idx - 1]) {
@@ -554,22 +577,28 @@ pub const TextExtractor = struct {
     //                        ^~
     fn handleTagEndFound(self: *Self, html: []const u8) Error!usize {
         const c = html[0];
-        if (ascii.isWhitespace(c)) return 1;
-        if (c == '>') {
-            defer self.tag_buffer.len = 0;
-            if (self.stack.getLastOrNull()) |tag| {
-                try self.queueWhitespace(self.stack.getLast());
-                const end_tag = tag_from_str(self.tag_buffer);
-                if (self.tag_buffer.len > 0 and tag != end_tag) {
-                    self.handleUnmatchedTag(end_tag);
-                } else {
-                    _ = self.stack.pop();
-                }
-            }
+        if (c != '>') return 1;
 
-            self.state = State.text;
+        defer self.tag_buffer.clearRetainingCapacity();
+        if (self.stack.getLastOrNull()) |tag| {
+	    // plaintext is a special tag.
+	    if (tag == .plaintext) {
+		self.state = .plaintext;
+		return 1;
+	    }
+
+	    // Non void tag, or tag that does not end with /.
+	    if (self.tag_buffer.items.len > 0) {
+		const end_tag = tag_from_str(self.tag_buffer.items);
+		try self.queueWhitespace(end_tag);
+		self.popMatching(end_tag);
+	    } else {
+		// Tag buffer is empty if it's void tag, just pop it.
+		_ = self.stack.pop();
+	    }
         }
 
+        self.state = State.text;
         return 1;
     }
 
@@ -625,14 +654,20 @@ pub const TextExtractor = struct {
     //<!-- ekdy -->
     //    ^~~~~~
     fn handleComment(self: *Self, html: []const u8) Error!usize {
-        // Immediately exit when '--' is seen. Process 3 chars because
-        // '--' cannot occur without the final '>'.
-        if (html.len > 1 and std.mem.eql(u8, html[0..2], "--")) {
+        if (html.len > 2 and std.mem.eql(u8, html[0..3], "-->")) {
             self.state = State.text;
             return 3;
         }
 
         return 1;
+    }
+
+    //<plaintext>ekdy...
+    //           ^~~~~~~
+    fn handlePlaintext(self: *Self, html: []const u8, writer: *std.io.Writer) Error!usize {
+	_ = self;
+	try writer.writeAll(html);
+	return html.len;
     }
 };
 
@@ -642,20 +677,23 @@ const talloc = std.testing.allocator;
 fn expectConvert(expected: []const u8, html_text: []const u8) !void {
     var allocating = std.io.Writer.Allocating.init(talloc);
     defer allocating.deinit();
-    var extractor = TextExtractor{};
+    var extractor = try TextExtractor.init(talloc);
     defer extractor.deinit(talloc);
     try extractor.convert(talloc, html_text, &allocating.writer);
+    try extractor.eos(&allocating.writer);
     try std.testing.expectEqualStrings(expected, allocating.written());
 }
 
 /// Check if html to text (with entity decoding) works as expected.
-fn expectConvertDecoded(expected: []const u8, html_text: []const u8) !void {
+fn expectConvertDe(expected: []const u8, html_text: []const u8) !void {
     var allocating = std.io.Writer.Allocating.init(talloc);
     defer allocating.deinit();
     var decoder = decoding.EntityDecoder.init(&allocating.writer);
-    var extractor = TextExtractor{};
+    var extractor = try TextExtractor.init(talloc);
     defer extractor.deinit(talloc);
     try extractor.convert(talloc, html_text, &decoder.writer);
+    try extractor.eos(&allocating.writer);
+    try decoder.writer.flush();
     try std.testing.expectEqualStrings(expected, allocating.written());
 }
 
@@ -810,9 +848,10 @@ fn expectConvertFile(comptime file_base: []const u8) !void {
     );
     defer talloc.free(text);
 
-    try expectConvertDecoded(text, html);
+    try expectConvertDe(text, html);
 }
 
+// Tests from the wild!
 test "integration_mygithub" {
     try expectConvertFile("mygithub");
 }
@@ -824,3 +863,336 @@ test "integration_w3c" {
 test "integration_vertex_cover" {
     try expectConvertFile("vertex_cover");
 }
+
+// Tests from:
+// https://github.com/html5lib/html5lib-tests/tree/master/tree-construction.
+// Expected strings obtained partially from python beautifulsoup package.
+
+test "html5lib_tests1" {
+    try expectConvertDe("Test", "Test");
+    try expectConvertDe("One\n\nTwo", "<p>One<p>Two");
+    try expectConvertDe("Line1\nLine2\nLine3\nLine4", "Line1<br>Line2<br>Line3<br>Line4");
+    try expectConvertDe("", "<html>");
+    try expectConvertDe("", "<head>");
+    try expectConvertDe("", "<body>");
+    try expectConvertDe("", "<html><head>");
+    try expectConvertDe("", "<html><head></head>");
+    try expectConvertDe("", "<html><head></head><body>");
+    try expectConvertDe("", "<html><head></head><body></body>");
+    try expectConvertDe("", "<html><head><body></body></html>");
+    try expectConvertDe("", "<html><head></body></html>");
+    try expectConvertDe("", "<html><head><body></html>");
+    try expectConvertDe("", "<html><body></html>");
+    try expectConvertDe("", "<body></html>");
+    try expectConvertDe("", "<head></html>");
+    try expectConvertDe("", "</head>");
+    try expectConvertDe("", "</body>");
+    try expectConvertDe("", "</html>");
+    try expectConvertDe("", "<b><table><td><i></table>");
+    try expectConvertDe("X", "<b><table><td></b><i></table>X");
+    try expectConvertDe("Hello\n\nWorld", "<h1>Hello<h2>World");
+    try expectConvertDe("XYZ", "<a><p>X<a>Y</a>Z</p></a>");
+    try expectConvertDe("foobar", "<b><button>foo</b>bar");
+    try expectConvertDe("foobar", "<!DOCTYPE html><span><button>foo</span>bar");
+    try expectConvertDe("X", "<p><b><div><marquee></p></b></div>X");
+    try expectConvertDe("<p>", "<script><div></script></div><title><p></title><p><p>");
+    try expectConvertDe("--", "<!--><div>--<!-->");
+    try expectConvertDe("", "<p><hr></p>");
+    try expectConvertDe("X", "<select><b><option><select><option></b></select>X");
+    try expectConvertDe(
+        "XCY",
+        "<a><table><td><a><table></table><a></tr><a></table><b>X</b>C<a>Y",
+    );
+    try expectConvertDe("012", "<a X>0<b>1<a Y>2");
+    try expectConvertDe(
+        "hello\n\nexcite!me!\nplease!",
+        "<!-----><font><div>hello<table>excite!<b>me!<th><i>please!</tr><!--X-->",
+    );
+    try expectConvertDe(
+        "hello\nworld\n\nhow\ndo\n\nyou",
+        "<!DOCTYPE html><li>hello<li>world<ul>how<li>do</ul>you</body><!--do-->",
+    );
+    try expectConvertDe(
+        "A\nB\nCD\nE",
+        "<!DOCTYPE html>A<option>B<optgroup>C<select>D</option>E",
+    );
+    try expectConvertDe("<", "<");
+    try expectConvertDe("<#", "<#");
+    try expectConvertDe("", "</");
+    try expectConvertDe("", "</#");
+    try expectConvertDe("", "<?");
+    try expectConvertDe("", "<?#");
+    try expectConvertDe("", "<!");
+    try expectConvertDe("", "<!#");
+    try expectConvertDe("", "<?COMMENT?>");
+    try expectConvertDe("", "<!COMMENT>");
+    try expectConvertDe("", "</ COMMENT >");
+    try expectConvertDe("", "<?COM--MENT?>");
+    try expectConvertDe("", "<!COM--MENT>");
+    try expectConvertDe("", "</ COM--MENT >");
+    try expectConvertDe("", "<!DOCTYPE html><style> EOF");
+    try expectConvertDe(
+        "--> EOF",
+        "<!DOCTYPE html><script> <!-- </script> --> </script> EOF",
+    );
+    try expectConvertDe("TEST", "<b><p></b>TEST");
+    try expectConvertDe("TEST", "<p id=a><b><p id=b></b>TEST");
+    try expectConvertDe("TEST", "<b id=a><p><b id=b></p></b>TEST");
+    try expectConvertDe(
+        "U-test\n\nTest",
+        "<!DOCTYPE html><title>U-test</title><body><div><p>Test<u></p></div></body>",
+    );
+    try expectConvertDe("", "<!DOCTYPE html><font><table></font></table></font>");
+    try expectConvertDe("hellocruelworld", "<font><p>hello<b>cruel</font>world");
+    try expectConvertDe("TestTest", "<b>Test</i>Test");
+    try expectConvertDe("AB\nC", "<b>A<cite>B<div>C");
+    try expectConvertDe("AB\nCD", "<b>A<cite>B<div>C</cite>D");
+    try expectConvertDe("AB\nCD", "<b>A<cite>B<div>C</b>D");
+    try expectConvertDe("", "");
+    try expectConvertDe("", "<DIV>");
+    try expectConvertDe("abc", "<DIV> abc");
+    try expectConvertDe("abc", "<DIV> abc <B>");
+    try expectConvertDe("abc def", "<DIV> abc <B> def");
+    try expectConvertDe("abc def", "<DIV> abc <B> def <I>");
+    try expectConvertDe("abc def ghi", "<DIV> abc <B> def <I> ghi");
+    try expectConvertDe("abc def ghi", "<DIV> abc <B> def <I> ghi <P>");
+    try expectConvertDe("abc def ghi\n\njkl", "<DIV> abc <B> def <I> ghi <P> jkl");
+    try expectConvertDe("abc def ghi\n\njkl", "<DIV> abc <B> def <I> ghi <P> jkl </B>");
+    try expectConvertDe(
+        "abc def ghi\n\njkl mno",
+        "<DIV> abc <B> def <I> ghi <P> jkl </B> mno",
+    );
+    try expectConvertDe(
+        "abc def ghi\n\njkl mno",
+        "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I>",
+    );
+    try expectConvertDe(
+        "abc def ghi\n\njkl mno pqr",
+        "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr",
+    );
+    try expectConvertDe(
+        "abc def ghi\n\njkl mno pqr",
+        "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P>",
+    );
+    try expectConvertDe(
+        "abc def ghi\n\njkl mno pqr\n\nstu",
+        "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P> stu",
+    );
+    try expectConvertDe("", "<test attribute" ++ "-" ** 1024 ++ ">");
+    try expectConvertDe(
+        "aba\n\nbr\nx\n\naoe",
+        "<a href=\"blah\">aba<table><a href=\"foo\">br<tr><td></td></tr>x</table>aoe",
+    );
+    try expectConvertDe(
+        "aba\n\nbr\nx\n\naoe",
+        "<a href=\"blah\">aba<table><tr><td><a href=\"foo\">br</td></tr>x</table>aoe",
+    );
+    try expectConvertDe(
+        "aba\nbr\nx\n\naoe",
+        "<table><a href=\"blah\">aba<tr><td><a href=\"foo\">br</td></tr>x</table>aoe",
+    );
+    try expectConvertDe("aaaabbaa", "<a href=a>aa<marquee>aa<a href=b>bb</marquee>aa");
+    try expectConvertDe("", "<wbr><strike><code></strike><code><strike></code>");
+    try expectConvertDe("foo", "<!DOCTYPE html><spacer>foo");
+    try expectConvertDe("<meta><meta>", "<title><meta></title><link><title><meta></title>");
+    try expectConvertDe("", "<style><!--</style><meta><script>--><link></script>");
+    try expectConvertDe("", "<head><meta></head><link>");
+    try expectConvertDe("X", "<table><tr><tr><td><td><span><th><span>X</table>");
+    try expectConvertDe(
+        "<p>",
+        "<body><body><base><link><meta><title><p></title><body><p></body>",
+    );
+    try expectConvertDe("<p>", "<textarea><p></textarea>");
+    try expectConvertDe("", "<p><image></p>");
+    try expectConvertDe("", "<a><table><a></table><p><a><div><a>");
+    try expectConvertDe("", "<head></p><meta><p>");
+    try expectConvertDe("", "<head></html><meta><p>");
+    try expectConvertDe("", "<b><table><td></b><i></table>");
+    try expectConvertDe("", "<h1><h2>");
+    try expectConvertDe("", "<a><p><a></a></p></a>");
+    try expectConvertDe("", "<b><button></b></button></b>");
+    try expectConvertDe("", "<p><b><div><marquee></p></b></div>");
+    try expectConvertDe("", "<script></script></div><title></title><p><p>");
+    try expectConvertDe("", "<select><b><option><select><option></b></select>");
+    try expectConvertDe("", "<html><head><title></title><body></body></html>");
+    try expectConvertDe("", "<a><table><td><a><table></table><a></tr><a></table><a>");
+    try expectConvertDe(
+        "",
+        "<ul><li></li><div><li></div><li><li><div><li><address><li><b><em></b><li></ul>",
+    );
+    try expectConvertDe("a", "<ul><li><ul></li><li>a</li></ul></li></ul>");
+    try expectConvertDe(
+        "",
+        "<frameset><frame><frameset><frame></frameset><noframes></noframes></frameset>",
+    );
+    try expectConvertDe("", "<h1><table><td><h3></table><h3></h1>");
+    try expectConvertDe(
+        "",
+        "<table><colgroup><col><colgroup><col><col><col><colgroup><col><col><thead><tr>" ++
+            "<td></table>",
+    );
+    try expectConvertDe("", "<table><col><tbody><col><tr><col><td><col></table><col>");
+    try expectConvertDe(
+        "",
+        "<table><colgroup><tbody><colgroup><tr><colgroup><td><colgroup></table><colgroup>",
+    );
+    try expectConvertDe(
+        "",
+        "</strong></b></em></i></u></strike></s></blink></tt></pre></big></small></font>" ++
+            "</select></h1></h2></h3></h4></h5></h6></body></br></a></img></title></span>" ++
+            "</style></script></table></th></td></tr></frame></area></link></param></hr>" ++
+            "</input></col></base></meta></basefont></bgsound></embed></spacer></p></dd>" ++
+            "</dt></caption></colgroup></tbody></tfoot></thead></address></blockquote>" ++
+            "</center></dir></div></dl></fieldset></listing></menu></ol></ul></li></nobr>" ++
+            "</wbr></form></button></marquee></object></html></frameset></head></iframe>" ++
+            "</image></isindex></noembed></noframes></noscript></optgroup></option>" ++
+            "</plaintext></textarea>",
+    );
+    try expectConvertDe(
+        "",
+        "<table><tr></strong></b></em></i></u></strike></s></blink></tt></pre></big>" ++
+            "</small></font></select></h1></h2></h3></h4></h5></h6></body></br></a>" ++
+            "</img></title></span></style></script></table></th></td></tr></frame>" ++
+            "</area></link></param></hr></input></col></base></meta></basefont>" ++
+            "</bgsound></embed></spacer></p></dd></dt></caption></colgroup></tbody>" ++
+            "</tfoot></thead></address></blockquote></center></dir></div></dl>" ++
+            "</fieldset></listing></menu></ol></ul></li></nobr></wbr></form></button>" ++
+            "</marquee></object></html></frameset></head></iframe></image></isindex>" ++
+            "</noembed></noframes></noscript></optgroup></option></plaintext></textarea>",
+    );
+    try expectConvertDe("", "<frameset>");
+}
+
+test "html5lib_tests2" {
+    try expectConvertDe("Test", "<!DOCTYPE html>Test");
+    try expectConvertDe("test</div>test", "<textarea>test</div>test");
+    try expectConvertDe("", "<table><td>");
+    try expectConvertDe("test", "<table><td>test</tbody></table>");
+    try expectConvertDe("test", "<frame>test");
+    try expectConvertDe("", "<!DOCTYPE html><frameset>test");
+    try expectConvertDe("", "<!DOCTYPE html><frameset> te st");
+    try expectConvertDe("te st", "<!DOCTYPE html><frameset></frameset> te st");
+    try expectConvertDe("", "<!DOCTYPE html><frameset><!DOCTYPE html>");
+    try expectConvertDe("test", "<!DOCTYPE html><font><p><b>test</font>");
+    try expectConvertDe("", "<!DOCTYPE html><dt><div><dd>");
+    try expectConvertDe("", "<script></x");
+    try expectConvertDe("<td>", "<table><plaintext><td>");
+    try expectConvertDe("</plaintext>", "<plaintext></plaintext>");
+    try expectConvertDe("TEST", "<!DOCTYPE html><table><tr>TEST");
+    try expectConvertDe("", "<!DOCTYPE html><body t1=1><body t2=2><body t3=3 t4=4>");
+    try expectConvertDe("", "</b test");
+    try expectConvertDe("X", "<!DOCTYPE html></b test<b &=&amp>X");
+    try expectConvertDe("", "<!doctypehtml><scrIPt type=text/x-foobar;baz>X</SCRipt");
+    try expectConvertDe("&", "&");
+    try expectConvertDe("&#", "&#");
+    try expectConvertDe("&#X", "&#X");
+    try expectConvertDe("&#x", "&#x");
+    try expectConvertDe("&#45", "&#45");
+    try expectConvertDe("&x-test", "&x-test");
+    try expectConvertDe("", "<!doctypehtml><p><li>");
+    try expectConvertDe("", "<!doctypehtml><p><dt>");
+    try expectConvertDe("", "<!doctypehtml><p><dd>");
+    try expectConvertDe("", "<!doctypehtml><p><form>");
+    try expectConvertDe("X", "<!DOCTYPE html><p></P>X");
+    try expectConvertDe("&AMP", "&AMP");
+    try expectConvertDe("&AMp;", "&AMp;");
+    try expectConvertDe(
+        "",
+        "<!DOCTYPE html><html><head></head><body>" ++
+            "<thisISasillyTESTelementNameToMakeSureCrazyTagNamesArePARSEDcorrectLY>",
+    );
+    try expectConvertDe("XX", "<!DOCTYPE html>X</body>X");
+    try expectConvertDe("", "<!DOCTYPE html><!-- X");
+    try expectConvertDe(
+        "test TEST\ntest",
+        "<!DOCTYPE html><table><caption>test TEST</caption><td>test",
+    );
+    try expectConvertDe("", "<!DOCTYPE html><select><option><optgroup>");
+    try expectConvertDe(
+        "",
+        "<!DOCTYPE html><select><optgroup><option></optgroup><option><select><option>",
+    );
+    try expectConvertDe("", "<!DOCTYPE html><select><optgroup><option><optgroup>");
+    try expectConvertDe("foo\nbar", "<!DOCTYPE html><datalist><option>foo</datalist>bar");
+    try expectConvertDe("", "<!DOCTYPE html><font><input><input></font>");
+    try expectConvertDe("", "<!DOCTYPE html><!-- XXX - XXX -->");
+    try expectConvertDe("", "<!DOCTYPE html><!-- XXX - XXX");
+    try expectConvertDe("", "<!DOCTYPE html><!-- XXX - XXX - XXX -->");
+    try expectConvertDe("", "<!DOCTYPE html> <!DOCTYPE html>");
+    try expectConvertDe("test test", "test\ntest");
+    try expectConvertDe("test</body>", "<!DOCTYPE html><body><title>test</body></title>");
+    try expectConvertDe(
+        "X",
+        "<!DOCTYPE html><body><title>X</title><meta name=z><link rel=foo>" ++
+            "<style>\nx { content:\"</style\" } </style>",
+    );
+    try expectConvertDe("", "<!DOCTYPE html><select><optgroup></optgroup></select>");
+    try expectConvertDe("", "\n");
+    try expectConvertDe("", "<!DOCTYPE html>  <html>");
+    try expectConvertDe(
+        "x",
+        "<!DOCTYPE html><script>\n</script>  <title>x</title>  </head>",
+    );
+    try expectConvertDe("", "<!DOCTYPE html><html><body><html id=x>");
+    try expectConvertDe("X", "<!DOCTYPE html>X</body><html id=\"x\">");
+    try expectConvertDe("", "<!DOCTYPE html><head><html id=x>");
+    try expectConvertDe("XX", "<!DOCTYPE html>X</html>X");
+    try expectConvertDe("X", "<!DOCTYPE html>X</html>");
+    try expectConvertDe("X\n\nX", "<!DOCTYPE html>X</html><p>X");
+    try expectConvertDe("X", "<!DOCTYPE html>X<p/x/y/z>");
+    try expectConvertDe("", "<!DOCTYPE html><!--x--");
+    try expectConvertDe("", "<!DOCTYPE html><table><tr><td></p></table>");
+    try expectConvertDe(">-->", "<!DOCTYPE <!DOCTYPE HTML>><!--<!--x-->-->");
+    try expectConvertDe("", "<!doctype html><div><form></form><div></div></div>");
+}
+
+// test "html5lib_tests3" {
+//     try expectConvert("", "<head></head><style></style>");
+//     try expectConvert("", "<head></head><script></script>");
+//     try expectConvert("", "<head></head><!-- --><style></style><!-- --><script></script>");
+//     try expectConvert("x", "<head></head><!-- -->x<style></style><!-- --><script></script>");
+//     try expectConvert(
+//         "",
+//         "<!DOCTYPE html><html><head></head><body><pre>\n</pre></body></html>",
+//     );
+//     try expectConvert(
+//         "foo",
+//         "<!DOCTYPE html><html><head></head><body><pre>\nfoo</pre></body></html>",
+//     );
+//     try expectConvert(
+//         "foo",
+//         "<!DOCTYPE html><html><head></head><body><pre>\n\nfoo</pre></body></html>",
+//     );
+//     try expectConvert(
+//         "foo",
+//         "<!DOCTYPE html><html><head></head><body><pre>\nfoo\n</pre></body></html>",
+//     );
+//     try expectConvert(
+//         "x",
+//         "<!DOCTYPE html><html><head></head><body><pre>x</pre><span>\n</span></body></html>",
+//     );
+//     try expectConvert(
+//         "xy",
+//         "<!DOCTYPE html><html><head></head><body><pre>x\ny</pre></body></html>",
+//     );
+//     try expectConvert(
+//         "xy",
+//         "<!DOCTYPE html><html><head></head><body><pre>x<div>\ny</pre></body></html>",
+//     );
+//     try expectConvert("A", "<!DOCTYPE html><pre>&#x0a;&#x0a;A</pre>");
+//     try expectConvert("", "<!DOCTYPE html><HTML><META><HEAD></HEAD></HTML>");
+//     try expectConvert("", "<!DOCTYPE html><HTML><HEAD><head></HEAD></HTML>");
+//     try expectConvert("foobarbaz", "<textarea>foo<span>bar</span><i>baz");
+//     try expectConvert("foobarbaz", "<title>foo<span>bar</em><i>baz");
+//     try expectConvert("", "<!DOCTYPE html><textarea>\n</textarea>");
+//     try expectConvert("foo", "<!DOCTYPE html><textarea>\nfoo</textarea>");
+//     try expectConvert("foo", "<!DOCTYPE html><textarea>\n\nfoo</textarea>");
+//     try expectConvert(
+//         "",
+//         "<!DOCTYPE html><html><head></head><body><ul><li><div><p><li></ul></body></html>",
+//     );
+//     try expectConvert("", "<!doctype html><nobr><nobr><nobr>");
+//     try expectConvert("", "<!doctype html><nobr><nobr></nobr><nobr>");
+//     try expectConvert("", "<!doctype html><html><body><p><table></table></body></html>");
+//     try expectConvert("", "<p><table></table>");
+// }
