@@ -221,11 +221,13 @@ Currently this is only an HTML stripping tool. It removes HTML tags and other bo
 
 Build
 
-# An optimized build zig build -Doptimize=ReleaseFast
+# An optimized build
+zig build -Doptimize=ReleaseFast
 
 Usage
 
-# Stripped content will be in stdout zig-out/bin/crawler <your_file>.html
+# Stripped content will be in stdout
+zig-out/bin/crawler <your_file>.html
 
 Edit repository details
 

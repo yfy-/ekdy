@@ -20,17 +20,16 @@ pub fn main() !void {
     const stdin = &stdin_reader.interface;
     const stdout = &stdout_writer.interface;
 
-    var decoder = ekdy.decoding.EntityDecoder.init(stdout);
-    var extractor = try ekdy.html.TextExtractor.init(allocator);
+    var extractor = try ekdy.html.TextExtractor.init(allocator, stdout);
     defer extractor.deinit(allocator);
 
     while (stdin.fillMore()) {
 	const chunk = stdin.buffered();
 	defer stdin.tossBuffered();
 	if (chunk.len == 0) continue;
-	try extractor.convert(allocator, chunk, &decoder.writer);
+	try extractor.convert(allocator, chunk);
     } else |err| if (err == error.ReadFailed) return err;
 
-    try extractor.eos(&decoder.writer);
-    try decoder.writer.flush();
+    try extractor.eos();
+    try stdout.flush();
 }

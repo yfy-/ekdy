@@ -99,7 +99,7 @@ pub const EntityDecoder = struct {
         self.state = .text;
         self.named_entity_len = 0;
         self.numeric_entity = 0;
-	self.hex_char = null;
+        self.hex_char = null;
     }
 
     fn numeric_codepoint(self: *Self) u21 {
@@ -112,6 +112,8 @@ pub const EntityDecoder = struct {
 
     /// Write a chunk decoding.
     fn write_decoding(self: *Self, chunk: []const u8) Writer.Error!void {
+	// FIXME: This has become so much complex than I initially thought.
+	// It will look simpler if each state has its own function.
         for (chunk) |c| {
             switch (self.state) {
                 .text => {
@@ -123,28 +125,24 @@ pub const EntityDecoder = struct {
                 },
                 .entity_begin => {
                     switch (c) {
-                        ';' => {
-                            try self.out_writer.writeAll("&;");
-                            self.transition_to_text();
-                        },
                         '#' => self.state = .numeric_begin,
-                        else => {
+                        'A'...'Z', 'a'...'z' => {
                             self.named_entity[0] = c;
                             self.named_entity_len += 1;
                             self.state = .entity_named;
+                        },
+                        else => {
+                            try self.out_writer.print("&{c}", .{c});
+                            self.transition_to_text();
                         },
                     }
                 },
                 .numeric_begin => {
                     switch (c) {
-                        ';' => {
-                            try self.out_writer.writeAll("&#;");
-                            self.transition_to_text();
-                        },
                         'x', 'X' => {
-			    self.hex_char = c;
-			    self.state = .hex_begin;
-			},
+                            self.hex_char = c;
+                            self.state = .hex_begin;
+                        },
                         '0'...'9' => {
                             self.numeric_entity = std.fmt.charToDigit(
                                 c,
@@ -160,10 +158,6 @@ pub const EntityDecoder = struct {
                 },
                 .hex_begin => {
                     switch (c) {
-                        ';' => {
-                            try self.out_writer.print("&#{c};", .{self.hex_char.?});
-                            self.transition_to_text();
-                        },
                         '0'...'9', 'a'...'f', 'A'...'F' => {
                             self.numeric_entity = std.fmt.charToDigit(
                                 c,
@@ -172,7 +166,7 @@ pub const EntityDecoder = struct {
                             self.state = .entity_hex;
                         },
                         else => {
-                            try self.out_writer.print("&#{c}{c}", .{self.hex_char.?, c});
+                            try self.out_writer.print("&#{c}{c}", .{ self.hex_char.?, c });
                             self.transition_to_text();
                         },
                     }
@@ -222,19 +216,39 @@ pub const EntityDecoder = struct {
                     }
                 },
                 .entity_named => {
-                    const ent_name = self.named_entity[0..self.named_entity_len];
-                    if (c == ';') {
-                        if (EncodingEntityMap.get(ent_name)) |*codepoints| {
-                            try self.out_writer.print("{u}", .{codepoints.*[0]});
-                            if (codepoints.*[1] != 0) {
-                                try self.out_writer.print("{u}", .{codepoints.*[1]});
+                    if (self.named_entity_len == 31) {
+                        try self.out_writer.print(
+                            "&{s}{c}",
+                            .{ self.named_entity[0..self.named_entity_len], c },
+                        );
+
+                        self.transition_to_text();
+                    } else if (!std.ascii.isAlphanumeric(c)) {
+                        var i = self.named_entity_len;
+                        while (i > 1) : (i -= 1) {
+                            const ent_name = self.named_entity[0..i];
+                            if (EncodingEntityMap.get(ent_name)) |*codepoints| {
+                                try self.out_writer.print("{u}", .{codepoints.*[0]});
+                                if (codepoints.*[1] != 0) {
+                                    try self.out_writer.print("{u}", .{codepoints.*[1]});
+                                }
+
+				// Dump whatever unmatched.
+                                try self.out_writer.writeAll(
+                                    self.named_entity[i..self.named_entity_len],
+                                );
+
+				// Dump the char if not a legal end i.e. ';'.
+                                if (c != ';') try self.out_writer.writeByte(c);
+                                break;
                             }
                         } else {
-                            try self.out_writer.print("&{s};", .{ent_name});
+                            try self.out_writer.print(
+                                "&{s}{c}",
+                                .{ self.named_entity[0..self.named_entity_len], c },
+                            );
                         }
-                        self.transition_to_text();
-                    } else if (self.named_entity_len == 31) {
-                        try self.out_writer.print("&{s}{c}", .{ ent_name, c });
+
                         self.transition_to_text();
                     } else {
                         self.named_entity[self.named_entity_len] = c;
@@ -311,6 +325,14 @@ test "decodeNamedEntityLong" {
         "&CounterClockwiseContourIntegralaaa;",
         "&CounterClockwiseContourIntegralaaa;",
     );
+}
+
+test "decodeLongestMatch" {
+    try expectDecodeEntity("abc&ampx ", "abc&x ");
+}
+
+test "numericInvalidEnd" {
+    try expectDecodeEntity("&#60x", "<x");
 }
 
 pub const EncodingEntityMap = std.StaticStringMap([2]u21).initComptime(

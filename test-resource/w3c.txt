@@ -64,7 +64,12 @@ A ">" character.
 
 A permitted-public-ID-system-ID-combination is any combination of a public ID (the first quoted string in the doctype) and system ID (the second quoted string, if any, in the doctype) such that the combination corresponds to one of the six deprecated doctypes in the following list of deprecated doctypes:
 
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0//EN"> <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd"> <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"> <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"> <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0//EN">
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 
 A legacy-tool-compatible doctype consists of the following parts, in exactly the following order:
 
@@ -390,6 +395,14 @@ CDATA sections are allowed only in the contents of elements from the SVG and Mat
 
 The following shows an example of a CDATA section.
 
-<annotation encoding="text/latex"> <![CDATA[\documentclass{article} \begin{document} \title{E} \maketitle The base of the natural logarithms, approximately 2.71828. \end{document}]]> </annotation>
+
+<annotation encoding="text/latex">
+  <![CDATA[\documentclass{article}
+  \begin{document}
+  \title{E}
+  \maketitle
+  The base of the natural logarithms, approximately 2.71828.
+  \end{document}]]>
+</annotation>
 
 « documents elements by function »
