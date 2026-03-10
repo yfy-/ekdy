@@ -112,8 +112,8 @@ pub const EntityDecoder = struct {
 
     /// Write a chunk decoding.
     fn write_decoding(self: *Self, chunk: []const u8) Writer.Error!void {
-	// FIXME: This has become so much complex than I initially thought.
-	// It will look simpler if each state has its own function.
+        // FIXME: This has become so much complex than I initially thought.
+        // It will look simpler if each state has its own function.
         for (chunk) |c| {
             switch (self.state) {
                 .text => {
@@ -233,12 +233,12 @@ pub const EntityDecoder = struct {
                                     try self.out_writer.print("{u}", .{codepoints.*[1]});
                                 }
 
-				// Dump whatever unmatched.
+                                // Dump whatever unmatched.
                                 try self.out_writer.writeAll(
                                     self.named_entity[i..self.named_entity_len],
                                 );
 
-				// Dump the char if not a legal end i.e. ';'.
+                                // Dump the char if not a legal end i.e. ';'.
                                 if (c != ';') try self.out_writer.writeByte(c);
                                 break;
                             }

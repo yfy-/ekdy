@@ -24,10 +24,10 @@ pub fn main() !void {
     defer extractor.deinit(allocator);
 
     while (stdin.fillMore()) {
-	const chunk = stdin.buffered();
-	defer stdin.tossBuffered();
-	if (chunk.len == 0) continue;
-	try extractor.convert(allocator, chunk);
+        const chunk = stdin.buffered();
+        defer stdin.tossBuffered();
+        if (chunk.len == 0) continue;
+        try extractor.convert(allocator, chunk);
     } else |err| if (err == error.ReadFailed) return err;
 
     try extractor.eos();
