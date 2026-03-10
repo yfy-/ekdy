@@ -181,9 +181,9 @@ Examples of vertex covers
 
 Examples of minimum vertex covers
 
-Formally, a vertex cover V ′ {\displaystyle V'} of an undirected graph G = ( V , E ) {\displaystyle G=(V,E)} is a subset of V {\displaystyle V} such that u v ∈ E ⇒ u ∈ V ′ ∨ v ∈ V ′ {\displaystyle uv\in E\Rightarrow u\in V'\lor v\in V'} , that is to say it is a set of vertices V ′ {\displaystyle V'} where every edge has at least one endpoint in the vertex cover V ′ {\displaystyle V'} . Such a set is said to cover the edges of G {\displaystyle G} . The upper figure shows two examples of vertex covers, with some vertex cover V ′ {\displaystyle V'} marked in red.
+Formally, a vertex cover V ′ of an undirected graph G = ( V , E ) is a subset of V such that u v ∈ E ⇒ u ∈ V ′ ∨ v ∈ V ′ , that is to say it is a set of vertices V ′ where every edge has at least one endpoint in the vertex cover V ′ . Such a set is said to cover the edges of G . The upper figure shows two examples of vertex covers, with some vertex cover V ′ marked in red.
 
-A minimum vertex cover is a vertex cover of smallest possible size. The vertex cover number τ {\displaystyle \tau } is the size of a minimum vertex cover, i.e. τ = | V ′ | {\displaystyle \tau =|V'|} . The lower figure shows examples of minimum vertex covers in the previous graphs.
+A minimum vertex cover is a vertex cover of smallest possible size. The vertex cover number τ is the size of a minimum vertex cover, i.e. τ = | V ′ | . The lower figure shows examples of minimum vertex covers in the previous graphs.
 
 Examples
 
@@ -191,7 +191,7 @@ Examples
 
 The set of all vertices is a vertex cover.
 The endpoints of any maximal matching form a vertex cover.
-The complete bipartite graph K m , n {\displaystyle K_{m,n}} has a minimum vertex cover of size τ ( K m , n ) = min { m , n } {\displaystyle \tau (K_{m,n})=\min\{\,m,n\,\}} .
+The complete bipartite graph K m , n has a minimum vertex cover of size τ ( K m , n ) = min { m , n } .
 
 Properties
 
@@ -206,13 +206,13 @@ Computational problem
 
 The minimum vertex cover problem is the optimization problem of finding a smallest vertex cover in a given graph.
 
-INSTANCE: Graph G {\displaystyle G}
-OUTPUT: Smallest number k {\displaystyle k} such that G {\displaystyle G} has a vertex cover of size k {\displaystyle k} .
+INSTANCE: Graph G
+OUTPUT: Smallest number k such that G has a vertex cover of size k .
 
 If the problem is stated as a decision problem, it is called the vertex cover problem:
 
-INSTANCE: Graph G {\displaystyle G} and positive integer k {\displaystyle k} .
-QUESTION: Does G {\displaystyle G} have a vertex cover of size at most k {\displaystyle k} ?
+INSTANCE: Graph G and positive integer k .
+QUESTION: Does G have a vertex cover of size at most k ?
 
 The vertex cover problem is an NP-complete problem: it was one of Karp's 21 NP-complete problems. It is often used in computational complexity theory as a starting point for NP-hardness proofs.
 
@@ -220,21 +220,21 @@ ILP formulation
 
 [edit]
 
-Assume that every vertex has an associated cost of c ( v ) ≥ 0 {\displaystyle c(v)\geq 0} . The (weighted) minimum vertex cover problem can be formulated as the following integer linear program (ILP).[2]
+Assume that every vertex has an associated cost of c ( v ) ≥ 0 . The (weighted) minimum vertex cover problem can be formulated as the following integer linear program (ILP).[2]
 
 minimize
-∑ v ∈ V c ( v ) x v {\displaystyle \textstyle \sum _{v\in V}c(v)x_{v}}
+∑ v ∈ V c ( v ) x v
   
 (minimize the total cost)
 subject to
-x u + x v ≥ 1 {\displaystyle x_{u}+x_{v}\geq 1}
-for all { u , v } ∈ E {\displaystyle \{u,v\}\in E}
+x u + x v ≥ 1
+for all { u , v } ∈ E
 (cover every edge of the graph),
-x v ∈ { 0 , 1 } {\displaystyle x_{v}\in \{0,1\}}
-for all v ∈ V {\displaystyle v\in V} .
+x v ∈ { 0 , 1 }
+for all v ∈ V .
 (every vertex is either in the vertex cover or not)
 
-This ILP belongs to the more general class of ILPs for covering problems. The integrality gap of this ILP is 2 {\displaystyle 2} , so its relaxation (allowing each variable to be in the interval from 0 to 1, rather than requiring the variables to be only 0 or 1) gives a factor- 2 {\displaystyle 2} approximation algorithm for the minimum vertex cover problem. Furthermore, the linear programming relaxation of that ILP is half-integral, that is, there exists an optimal solution for which each entry x v {\displaystyle x_{v}} is either 0, 1/2, or 1. A 2-approximate vertex cover can be obtained from this fractional solution by selecting the subset of vertices whose variables are nonzero.
+This ILP belongs to the more general class of ILPs for covering problems. The integrality gap of this ILP is 2 , so its relaxation (allowing each variable to be in the interval from 0 to 1, rather than requiring the variables to be only 0 or 1) gives a factor- 2 approximation algorithm for the minimum vertex cover problem. Furthermore, the linear programming relaxation of that ILP is half-integral, that is, there exists an optimal solution for which each entry x v is either 0, 1/2, or 1. A 2-approximate vertex cover can be obtained from this fractional solution by selecting the subset of vertices whose variables are nonzero.
 
 Exact evaluation
 
@@ -250,9 +250,9 @@ Fixed-parameter tractability
 
 [edit]
 
-An exhaustive search algorithm can solve the problem in time 2knO(1), where k is the size of the vertex cover. Vertex cover is therefore fixed-parameter tractable, and if we are only interested in small k, we can solve the problem in polynomial time. One algorithmic technique that works here is called bounded search tree algorithm, and its idea is to repeatedly choose some vertex and recursively branch, with two cases at each step: place either the current vertex or all its neighbours into the vertex cover. The algorithm for solving vertex cover that achieves the best asymptotic dependence on the parameter runs in time O ( 1.2738 k + ( k ⋅ n ) ) {\displaystyle O(1.2738^{k}+(k\cdot n))} .[5] The klam value of this time bound (an estimate for the largest parameter value that could be solved in a reasonable amount of time) is approximately 190. That is, unless additional algorithmic improvements can be found, this algorithm is suitable only for instances whose vertex cover number is 190 or less. Under reasonable complexity-theoretic assumptions, namely the exponential time hypothesis, the running time cannot be improved to 2o(k), even when n {\displaystyle n} is O ( k ) {\displaystyle O(k)} .
+An exhaustive search algorithm can solve the problem in time 2knO(1), where k is the size of the vertex cover. Vertex cover is therefore fixed-parameter tractable, and if we are only interested in small k, we can solve the problem in polynomial time. One algorithmic technique that works here is called bounded search tree algorithm, and its idea is to repeatedly choose some vertex and recursively branch, with two cases at each step: place either the current vertex or all its neighbours into the vertex cover. The algorithm for solving vertex cover that achieves the best asymptotic dependence on the parameter runs in time O ( 1.2738 k + ( k ⋅ n ) ) .[5] The klam value of this time bound (an estimate for the largest parameter value that could be solved in a reasonable amount of time) is approximately 190. That is, unless additional algorithmic improvements can be found, this algorithm is suitable only for instances whose vertex cover number is 190 or less. Under reasonable complexity-theoretic assumptions, namely the exponential time hypothesis, the running time cannot be improved to 2o(k), even when n is O ( k ) .
 
-However, for planar graphs, and more generally, for graphs excluding some fixed graph as a minor, a vertex cover of size k can be found in time 2 O ( k ) n O ( 1 ) {\displaystyle 2^{O({\sqrt {k}})}n^{O(1)}} , i.e., the problem is subexponential fixed-parameter tractable.[6] This algorithm is again optimal, in the sense that, under the exponential time hypothesis, no algorithm can solve vertex cover on planar graphs in time 2 o ( k ) n O ( 1 ) {\displaystyle 2^{o({\sqrt {k}})}n^{O(1)}} .[7]
+However, for planar graphs, and more generally, for graphs excluding some fixed graph as a minor, a vertex cover of size k can be found in time 2 O ( k ) n O ( 1 ) , i.e., the problem is subexponential fixed-parameter tractable.[6] This algorithm is again optimal, in the sense that, under the exponential time hypothesis, no algorithm can solve vertex cover on planar graphs in time 2 o ( k ) n O ( 1 ) .[7]
 
 Approximate evaluation
 
@@ -264,13 +264,13 @@ The set C constructed this way is a vertex cover: suppose that an edge e is not 
 
 This simple algorithm was discovered independently by Fanica Gavril and Mihalis Yannakakis.[8]
 
-More involved techniques show that there are approximation algorithms with a slightly better approximation factor. For example, an approximation algorithm with an approximation factor of 2 − Θ ( 1 / log ⁡ | V | ) {\textstyle 2-\Theta \left(1/{\sqrt {\log |V|}}\right)} is known.[9] The problem can be approximated with an approximation factor 2 / ( 1 + δ ) {\displaystyle 2/(1+\delta )} in δ {\displaystyle \delta } - dense graphs.[10]
+More involved techniques show that there are approximation algorithms with a slightly better approximation factor. For example, an approximation algorithm with an approximation factor of 2 − Θ ( 1 / log ⁡ | V | ) is known.[9] The problem can be approximated with an approximation factor 2 / ( 1 + δ ) in δ - dense graphs.[10]
 
 Inapproximability
 
 [edit]
 
-No better constant-factor approximation algorithm than the above one is known. The minimum vertex cover problem is APX-complete, that is, it cannot be approximated arbitrarily well unless P = NP. Using techniques from the PCP theorem, Dinur and Safra proved in 2005 that minimum vertex cover cannot be approximated within a factor of 1.3606 for any sufficiently large vertex degree unless P = NP.[11] Later, the factor was improved to 2 − ϵ {\displaystyle {\sqrt {2}}-\epsilon } for any ϵ > 0 {\displaystyle \epsilon >0} .[12] Moreover, if the unique games conjecture is true then minimum vertex cover cannot be approximated within any constant factor better than 2.[13]
+No better constant-factor approximation algorithm than the above one is known. The minimum vertex cover problem is APX-complete, that is, it cannot be approximated arbitrarily well unless P = NP. Using techniques from the PCP theorem, Dinur and Safra proved in 2005 that minimum vertex cover cannot be approximated within a factor of 1.3606 for any sufficiently large vertex degree unless P = NP.[11] Later, the factor was improved to 2 − ϵ for any ϵ > 0 .[12] Moreover, if the unique games conjecture is true then minimum vertex cover cannot be approximated within any constant factor better than 2.[13]
 
 Although finding the minimum-size vertex cover is equivalent to finding the maximum-size independent set, as described above, the two problems are not equivalent in an approximation-preserving way: The Independent Set problem has no constant-factor approximation unless P = NP.
 

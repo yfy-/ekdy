@@ -182,6 +182,9 @@ pub const Tag = enum(u8) {
     strike,
     tt,
     xmp,
+
+    // MathML tag
+    annotation,
 };
 
 /// Obtain Tag from string.
@@ -226,21 +229,20 @@ pub const tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.{}, .{
     .canvas = .{ .is_ignore = true },
     .fencedframe = .{ .is_ignore = true },
     .frameset = .{ .is_ignore = true },
-    .head = .{ .is_ignore = true },
     .iframe = .{ .is_ignore = true, .is_rawtext = true },
     .map = .{ .is_ignore = true },
-    .math = .{ .is_ignore = true },
+    .annotation = .{ .is_ignore = true },
     .noembed = .{ .is_ignore = true, .is_rawtext = true },
     .noframes = .{ .is_ignore = true, .is_rawtext = true },
 
     // Ekdy should act as if JS is disabled, therefore we treat
-    // noscript as an ordinary tag.
+    // noscript and object as an ordinary tag.
     // .noscript = .{ .is_ignore = true, .is_rawtext = true },
-    .object = .{ .is_ignore = true },
+    // .object = .{ .is_ignore = true },
     .picture = .{ .is_ignore = true },
     .script = .{ .is_ignore = true, .is_rawtext = true },
     .style = .{ .is_ignore = true, .is_rawtext = true },
-    .svg = .{ .is_ignore = true },
+    // .svg = .{ .is_ignore = true },
     .template = .{ .is_ignore = true },
     .video = .{ .is_ignore = true },
     .plaintext = .{ .is_rawtext = true, .is_void = true },
@@ -336,6 +338,9 @@ pub const TextExtractor = struct {
 
     cursor: usize = 0,
 
+    /// Depth of ignore tags.
+    ignore_depth: usize = 0,
+
     /// Depth of tags that output preformatted text.
     preformatted_depth: usize = 0,
 
@@ -430,7 +435,6 @@ pub const TextExtractor = struct {
                 return 1;
             }
 
-            // rawtext and rcdata are handled here.
             const tag_str = @tagName(tag.?);
             const tag_end_size = tag_str.len + 2;
             if (html.len >= tag_end_size and html[1] == '/') {
@@ -447,7 +451,7 @@ pub const TextExtractor = struct {
             }
         }
 
-        if (tag != null and tag_prop.?.is_ignore) return 1;
+        if (self.ignore_depth > 0) return 1;
 
         if (self.preformatted_depth == 0 and ascii.isWhitespace(c)) {
             // When last processed tag was br and it inserted a new line,
@@ -510,7 +514,6 @@ pub const TextExtractor = struct {
         const c = html[0];
         // Handle comments below
         if (html.len > 2 and std.mem.eql(u8, html[0..3], "!--")) {
-            self.tag_buffer.clearRetainingCapacity();
             self.state = State.comment;
 
             // Do not consume all 3, because it can abruptly finish
@@ -521,6 +524,9 @@ pub const TextExtractor = struct {
         if (ascii.isWhitespace(c) or c == '>' or c == '/') {
             const tag = tag_from_str(self.tag_buffer.items);
             try self.stack.append(allocator, tag);
+            if (tag_properties.get(tag).is_ignore)
+                self.ignore_depth += 1;
+
             if (tag_properties.get(tag).is_preformatted)
                 self.preformatted_depth += 1;
 
@@ -596,7 +602,11 @@ pub const TextExtractor = struct {
         while (found_idx > 0) : (found_idx -= 1) {
             if (end_tag == self.stack.items[found_idx - 1]) {
                 _ = self.stack.orderedRemove(found_idx - 1);
-                if (tag_properties.get(end_tag).is_preformatted)
+                const tp = tag_properties.get(end_tag);
+                if (tp.is_ignore)
+                    self.ignore_depth -|= 1;
+
+                if (tp.is_preformatted)
                     self.preformatted_depth -|= 1;
 
                 return;
@@ -1430,7 +1440,7 @@ test "html5lib_tests9" {
             "</table><p>quux",
     );
     try expectConvert(
-        "foobar\n\nquux",
+        "foobarbaz\n\nquux",
         "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi>baz" ++
             "</table><p>quux",
     );
@@ -1480,8 +1490,601 @@ test "html5lib_tests9" {
             "<mi xml:lang=en xlink:href=foo /></math>",
     );
     try expectConvert(
-        "",
+        "bar",
         "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math>" ++
             "<mi xml:lang=en xlink:href=foo />bar</math>",
     );
+}
+
+test "html5lib_tests10" {
+    try expectConvert("", "<!DOCTYPE html><svg></svg>");
+    try expectConvert("", "<!DOCTYPE html><svg></svg><![CDATA[a]]>");
+    try expectConvert("", "<!DOCTYPE html><body><svg></svg>");
+    try expectConvert("", "<!DOCTYPE html><body><select><svg></svg></select>");
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><select><option><svg></svg></option></select>",
+    );
+    try expectConvert("", "<!DOCTYPE html><body><table><svg></svg></table>");
+    try expectConvert("foo", "<!DOCTYPE html><body><table><svg><g>foo</g></svg></table>");
+    try expectConvert(
+        "foobar",
+        "<!DOCTYPE html><body><table><svg><g>foo</g><g>bar</g></svg></table>",
+    );
+    try expectConvert(
+        "foobar",
+        "<!DOCTYPE html><body><table><tbody><svg><g>foo</g><g>bar</g></svg></tbody></table>",
+    );
+    try expectConvert(
+        "foobar",
+        "<!DOCTYPE html><body><table><tbody><tr><svg><g>foo</g><g>bar</g></svg>" ++
+            "</tr></tbody></table>",
+    );
+    try expectConvert(
+        "foobar",
+        "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg>" ++
+            "</td></tr></tbody></table>",
+    );
+    try expectConvert(
+        "foobar\n\nbaz",
+        "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg>" ++
+            "<p>baz</td></tr></tbody></table>",
+    );
+    try expectConvert(
+        "foobar\n\nbaz",
+        "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g></svg><p>baz" ++
+            "</caption></table>",
+    );
+    try expectConvert(
+        "foobar\n\nbaz\n\nquux",
+        "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g><p>baz" ++
+            "</table><p>quux",
+    );
+    try expectConvert(
+        "foobarbaz\n\nquux",
+        "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g>baz</table><p>quux",
+    );
+    try expectConvert(
+        "foobar\n\nbaz\n\nquux",
+        "<!DOCTYPE html><body><table><colgroup><svg><g>foo</g><g>bar</g><p>baz</table" ++
+            "><p>quux",
+    );
+    try expectConvert(
+        "foobar\n\nbaz\n\nquux",
+        "<!DOCTYPE html><body><table><tr><td><select><svg><g>foo</g><g>bar</g>" ++
+            "<p>baz</table><p>quux",
+    );
+    try expectConvert(
+        "foobar\n\nbaz\n\nquux",
+        "<!DOCTYPE html><body><table><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux",
+    );
+    try expectConvert(
+        "foobar\n\nbaz",
+        "<!DOCTYPE html><body></body></html><svg><g>foo</g><g>bar</g><p>baz",
+    );
+    try expectConvert(
+        "foobar\n\nbaz",
+        "<!DOCTYPE html><body></body><svg><g>foo</g><g>bar</g><p>baz",
+    );
+    try expectConvert("", "<!DOCTYPE html><frameset><svg><g></g><g></g><p><span>");
+    try expectConvert("", "<!DOCTYPE html><frameset></frameset><svg><g></g><g>" ++
+        "</g><p><span>");
+    try expectConvert("", "<!DOCTYPE html><body xlink:href=foo><svg xlink:href=foo></svg>");
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg>" ++
+            "<g xml:lang=en xlink:href=foo></g></svg>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg>" ++
+            "<g xml:lang=en xlink:href=foo /></svg>",
+    );
+    try expectConvert(
+        "bar",
+        "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg>" ++
+            "<g xml:lang=en xlink:href=foo />bar</svg>",
+    );
+    try expectConvert("", "<svg></path>");
+    try expectConvert("a", "<div><svg></div>a");
+    try expectConvert("a", "<div><svg><path></div>a");
+    try expectConvert("", "<div><svg><path></svg><path>");
+    try expectConvert("a", "<div><svg><path><foreignObject><math></div>a");
+    try expectConvert("a", "<div><svg><path><foreignObject><p></div>a");
+    try expectConvert("a", "<!DOCTYPE html><svg><desc><div><svg><ul>a");
+    try expectConvert("a", "<!DOCTYPE html><svg><desc><svg><ul>a");
+    try expectConvert("", "<!DOCTYPE html><p><svg><desc><p>");
+    try expectConvert("<p>", "<!DOCTYPE html><p><svg><title><p>");
+    try expectConvert("", "<div><svg><path><foreignObject><p></foreignObject><p>");
+    try expectConvert(
+        "",
+        "<math><mi><div><object><div><span></span></div></object></div></mi><mi>",
+    );
+    try expectConvert(
+        "",
+        "<math><mi><svg><foreignObject><div><div></div></div></foreignObject>" ++
+            "</svg></mi><mi>",
+    );
+    try expectConvert("", "<svg><script></script><path>");
+    try expectConvert("", "<table><svg></svg><tr>");
+    try expectConvert("", "<math><mi><mglyph>");
+    try expectConvert("", "<math><mi><malignmark>");
+    try expectConvert("", "<math><mo><mglyph>");
+    try expectConvert("", "<math><mo><malignmark>");
+    try expectConvert("", "<math><mn><mglyph>");
+    try expectConvert("", "<math><mn><malignmark>");
+    try expectConvert("", "<math><ms><mglyph>");
+    try expectConvert("", "<math><ms><malignmark>");
+    try expectConvert("", "<math><mtext><mglyph>");
+    try expectConvert("", "<math><mtext><malignmark>");
+    try expectConvert("", "<math><annotation-xml><svg></svg></annotation-xml><mi>");
+    try expectConvert(
+        "",
+        "<math><annotation-xml><svg><foreignObject><div><math><mi></mi></math>" ++
+            "<span></span></div></foreignObject><path></path></svg></annotation-xml><mi>",
+    );
+    try expectConvert(
+        "",
+        "<math><annotation-xml><svg><foreignObject><math><mi><svg></svg></mi><mo>" ++
+            "</mo></math><span></span></foreignObject><path></path></svg>" ++
+            "</annotation-xml><mi>",
+    );
+}
+
+test "html5lib_tests11" {
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><svg attributeName='' attributeType='' baseFrequency=''" ++
+            " baseProfile='' calcMode='' clipPathUnits='' diffuseConstant='' " ++
+            "edgeMode='' filterUnits='' glyphRef='' gradientTransform='' " ++
+            "gradientUnits='' kernelMatrix='' kernelUnitLength='' keyPoints='' " ++
+            "keySplines='' keyTimes='' lengthAdjust='' limitingConeAngle='' " ++
+            "markerHeight='' markerUnits='' markerWidth='' maskContentUnits='' " ++
+            "maskUnits='' numOctaves='' pathLength='' patternContentUnits=''" ++
+            " patternTransform='' patternUnits='' pointsAtX='' pointsAtY=''" ++
+            " pointsAtZ='' preserveAlpha='' preserveAspectRatio='' " ++
+            "primitiveUnits='' refX='' refY='' repeatCount='' repeatDur=''" ++
+            " requiredExtensions='' requiredFeatures='' specularConstant='' " ++
+            "specularExponent='' spreadMethod='' startOffset='' stdDeviation='' " ++
+            "stitchTiles='' surfaceScale='' systemLanguage='' tableValues='' " ++
+            "targetX='' targetY='' textLength='' viewBox='' viewTarget=''" ++
+            " xChannelSelector='' yChannelSelector='' zoomAndPan=''></svg>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><BODY><SVG ATTRIBUTENAME='' ATTRIBUTETYPE='' BASEFREQUENCY=''" ++
+            " BASEPROFILE='' CALCMODE='' CLIPPATHUNITS='' DIFFUSECONSTANT='' " ++
+            "EDGEMODE='' FILTERUNITS='' GLYPHREF='' GRADIENTTRANSFORM='' " ++
+            "GRADIENTUNITS='' KERNELMATRIX='' KERNELUNITLENGTH='' KEYPOINTS='' " ++
+            "KEYSPLINES='' KEYTIMES='' LENGTHADJUST='' LIMITINGCONEANGLE='' " ++
+            "MARKERHEIGHT='' MARKERUNITS='' MARKERWIDTH='' MASKCONTENTUNITS='' " ++
+            "MASKUNITS='' NUMOCTAVES='' PATHLENGTH='' PATTERNCONTENTUNITS='' " ++
+            "PATTERNTRANSFORM='' PATTERNUNITS='' POINTSATX='' POINTSATY='' " ++
+            "POINTSATZ='' PRESERVEALPHA='' PRESERVEASPECTRATIO='' PRIMITIVEUNITS='' " ++
+            "REFX='' REFY='' REPEATCOUNT='' REPEATDUR='' REQUIREDEXTENSIONS='' " ++
+            "REQUIREDFEATURES='' SPECULARCONSTANT='' SPECULAREXPONENT='' " ++
+            "SPREADMETHOD='' STARTOFFSET='' STDDEVIATION='' STITCHTILES='' " ++
+            "SURFACESCALE='' SYSTEMLANGUAGE='' TABLEVALUES='' TARGETX='' TARGETY='' " ++
+            "TEXTLENGTH='' VIEWBOX='' VIEWTARGET='' XCHANNELSELECTOR='' " ++
+            "YCHANNELSELECTOR='' ZOOMANDPAN=''></SVG>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><svg attributename='' attributetype='' basefrequency='' " ++
+            "baseprofile='' calcmode='' clippathunits='' diffuseconstant='' edgemode=''" ++
+            " filterunits='' filterres='' glyphref='' gradienttransform='' " ++
+            "gradientunits='' kernelmatrix='' kernelunitlength='' keypoints='' " ++
+            "keysplines='' keytimes='' lengthadjust='' limitingconeangle='' " ++
+            "markerheight='' markerunits='' markerwidth='' maskcontentunits='' " ++
+            "maskunits='' numoctaves='' pathlength='' patterncontentunits='' " ++
+            "patterntransform='' patternunits='' pointsatx='' pointsaty='' " ++
+            "pointsatz='' preservealpha='' preserveaspectratio='' primitiveunits=''" ++
+            " refx='' refy='' repeatcount='' repeatdur='' requiredextensions='' " ++
+            "requiredfeatures='' specularconstant='' specularexponent='' spreadmethod=''" ++
+            " startoffset='' stddeviation='' stitchtiles='' surfacescale='' " ++
+            "systemlanguage='' tablevalues='' targetx='' targety='' textlength=''" ++
+            " viewbox='' viewtarget='' xchannelselector='' ychannelselector=''" ++
+            " zoomandpan=''></svg>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><math attributeName='' attributeType='' baseFrequency='' " ++
+            "baseProfile='' calcMode='' clipPathUnits='' diffuseConstant='' edgeMode=''" ++
+            " filterUnits='' glyphRef='' gradientTransform='' gradientUnits=''" ++
+            " kernelMatrix='' kernelUnitLength='' keyPoints='' keySplines='' " ++
+            "keyTimes='' lengthAdjust='' limitingConeAngle='' markerHeight='' " ++
+            "markerUnits='' markerWidth='' maskContentUnits='' maskUnits='' " ++
+            "numOctaves='' pathLength='' patternContentUnits='' patternTransform='' " ++
+            "patternUnits='' pointsAtX='' pointsAtY='' pointsAtZ='' preserveAlpha=''" ++
+            " preserveAspectRatio='' primitiveUnits='' refX='' refY='' repeatCount=''" ++
+            " repeatDur='' requiredExtensions='' requiredFeatures='' specularConstant=''" ++
+            " specularExponent='' spreadMethod='' startOffset='' stdDeviation=''" ++
+            " stitchTiles='' surfaceScale='' systemLanguage='' tableValues='' " ++
+            "targetX='' targetY='' textLength='' viewBox='' viewTarget='' " ++
+            "xChannelSelector='' yChannelSelector='' zoomAndPan=''></math>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><svg contentScriptType='' contentStyleType='' " ++
+            "externalResourcesRequired='' filterRes=''></svg>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><svg CONTENTSCRIPTTYPE='' CONTENTSTYLETYPE='' " ++
+            "EXTERNALRESOURCESREQUIRED='' FILTERRES=''></svg>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><svg contentscripttype='' contentstyletype='' " ++
+            "externalresourcesrequired='' filterres=''></svg>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><math contentScriptType='' contentStyleType='' " ++
+            "externalResourcesRequired='' filterRes=''></math>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><svg><altGlyph /><altGlyphDef /><altGlyphItem />" ++
+            "<animateColor /><animateMotion /><animateTransform /><clipPath />" ++
+            "<feBlend /><feColorMatrix /><feComponentTransfer /><feComposite />" ++
+            "<feConvolveMatrix /><feDiffuseLighting /><feDisplacementMap />" ++
+            "<feDistantLight /><feFlood /><feFuncA /><feFuncB /><feFuncG />" ++
+            "<feFuncR /><feGaussianBlur /><feImage /><feMerge /><feMergeNode />" ++
+            "<feMorphology /><feOffset /><fePointLight /><feSpecularLighting />" ++
+            "<feSpotLight /><feTile /><feTurbulence /><foreignObject /><glyphRef />" ++
+            "<linearGradient /><radialGradient /><textPath /></svg>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><svg><altglyph /><altglyphdef /><altglyphitem />" ++
+            "<animatecolor /><animatemotion /><animatetransform /><clippath />" ++
+            "<feblend /><fecolormatrix /><fecomponenttransfer /><fecomposite />" ++
+            "<feconvolvematrix /><fediffuselighting /><fedisplacementmap />" ++
+            "<fedistantlight /><feflood /><fefunca /><fefuncb /><fefuncg />" ++
+            "<fefuncr /><fegaussianblur /><feimage /><femerge /><femergenode />" ++
+            "<femorphology /><feoffset /><fepointlight /><fespecularlighting />" ++
+            "<fespotlight /><fetile /><feturbulence /><foreignobject /><glyphref />" ++
+            "<lineargradient /><radialgradient /><textpath /></svg>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><BODY><SVG><ALTGLYPH /><ALTGLYPHDEF /><ALTGLYPHITEM />" ++
+            "<ANIMATECOLOR /><ANIMATEMOTION /><ANIMATETRANSFORM /><CLIPPATH />" ++
+            "<FEBLEND /><FECOLORMATRIX /><FECOMPONENTTRANSFER /><FECOMPOSITE />" ++
+            "<FECONVOLVEMATRIX /><FEDIFFUSELIGHTING /><FEDISPLACEMENTMAP />" ++
+            "<FEDISTANTLIGHT /><FEFLOOD /><FEFUNCA /><FEFUNCB /><FEFUNCG />" ++
+            "<FEFUNCR /><FEGAUSSIANBLUR /><FEIMAGE /><FEMERGE /><FEMERGENODE />" ++
+            "<FEMORPHOLOGY /><FEOFFSET /><FEPOINTLIGHT /><FESPECULARLIGHTING />" ++
+            "<FESPOTLIGHT /><FETILE /><FETURBULENCE /><FOREIGNOBJECT /><GLYPHREF />" ++
+            "<LINEARGRADIENT /><RADIALGRADIENT /><TEXTPATH /></SVG>",
+    );
+    try expectConvert(
+        "",
+        "<!DOCTYPE html><body><math><altGlyph /><altGlyphDef /><altGlyphItem />" ++
+            "<animateColor /><animateMotion /><animateTransform /><clipPath />" ++
+            "<feBlend /><feColorMatrix /><feComponentTransfer /><feComposite />" ++
+            "<feConvolveMatrix /><feDiffuseLighting /><feDisplacementMap />" ++
+            "<feDistantLight /><feFlood /><feFuncA /><feFuncB /><feFuncG />" ++
+            "<feFuncR /><feGaussianBlur /><feImage /><feMerge /><feMergeNode />" ++
+            "<feMorphology /><feOffset /><fePointLight /><feSpecularLighting />" ++
+            "<feSpotLight /><feTile /><feTurbulence /><foreignObject /><glyphRef />" ++
+            "<linearGradient /><radialGradient /><textPath /></math>",
+    );
+    try expectConvert("", "<!DOCTYPE html><body><svg><solidColor /></svg>");
+}
+
+test "html5lib_tests12" {
+    try expectConvert(
+        "foobazeggs\n\nspam\n\nquuxbar",
+        "<!DOCTYPE html><body><p>foo<math><mtext><i>baz</i></mtext><annotation-xml>" ++
+            "<svg><desc><b>eggs</b></desc><g><foreignObject><P>spam<TABLE><tr><td>" ++
+            "<img></td></table></foreignObject></g><g>quux</g></svg></annotation-xml>" ++
+            "</math>bar",
+    );
+    try expectConvert(
+        "foobazeggs\n\nspam\n\nquuxbar",
+        "<!DOCTYPE html><body>foo<math><mtext><i>baz</i></mtext><annotation-xml><svg>" ++
+            "<desc><b>eggs</b></desc><g><foreignObject><P>spam<TABLE><tr><td><img></td>" ++
+            "</table></foreignObject></g><g>quux</g></svg></annotation-xml></math>bar",
+    );
+}
+
+test "html5lib_tests14" {
+    try expectConvert("", "<!DOCTYPE html><html><body><xyz:abc></xyz:abc>");
+    try expectConvert("", "<!DOCTYPE html><html><body><xyz:abc></xyz:abc><span></span>");
+    try expectConvert("", "<!DOCTYPE html><html><html abc:def=gh><xyz:abc></xyz:abc>");
+    try expectConvert("", "<!DOCTYPE html><html xml:lang=bar><html xml:lang=foo>");
+    try expectConvert("", "<!DOCTYPE html><html 123=456>");
+    try expectConvert("", "<!DOCTYPE html><html 123=456><html 789=012>");
+    try expectConvert("", "<!DOCTYPE html><html><body 789=012>");
+}
+
+test "html5lib_tests15" {
+    try expectConvert("X", "<!DOCTYPE html><p><b><i><u></p> <p>X");
+    try expectConvert("X", "<p><b><i><u></p>\n<p>X");
+    try expectConvert("", "<!doctype html></html> <head>");
+    try expectConvert("", "<!doctype html></body><meta>");
+    try expectConvert("", "<html></html><!-- foo -->");
+    try expectConvert("X", "<!doctype html></body><title>X</title>");
+    try expectConvert("X", "<!doctype html><table> X<meta></table>");
+    try expectConvert("x", "<!doctype html><table> x</table>");
+    try expectConvert("x", "<!doctype html><table> x </table>");
+    try expectConvert("x", "<!doctype html><table><tr> x</table>");
+    try expectConvert("X", "<!doctype html><table>X<style> <tr>x </style> </table>");
+    try expectConvert(
+        "foo\nbar",
+        "<!doctype html><div><table><a>foo</a> <tr><td>bar</td> </tr></table></div>",
+    );
+    try expectConvert(
+        "",
+        "<frame></frame></frame><frameset><frame><frameset><frame></frameset><noframes>" ++
+            "</frameset><noframes>",
+    );
+    try expectConvert("", "<!DOCTYPE html><object></html>");
+}
+
+test "html5lib_tests16" {
+    try expectConvert("", "<!doctype html><script>");
+    try expectConvert("", "<!doctype html><script>a");
+    try expectConvert("", "<!doctype html><script><");
+    try expectConvert("", "<!doctype html><script></");
+    try expectConvert("", "<!doctype html><script></S");
+    try expectConvert("", "<!doctype html><script></SC");
+    try expectConvert("", "<!doctype html><script></SCR");
+    try expectConvert("", "<!doctype html><script></SCRI");
+    try expectConvert("", "<!doctype html><script></SCRIP");
+    try expectConvert("", "<!doctype html><script></SCRIPT");
+    try expectConvert("", "<!doctype html><script></SCRIPT");
+    try expectConvert("", "<!doctype html><script></s");
+    try expectConvert("", "<!doctype html><script></sc");
+    try expectConvert("", "<!doctype html><script></scr");
+    try expectConvert("", "<!doctype html><script></scri");
+    try expectConvert("", "<!doctype html><script></scrip");
+    try expectConvert("", "<!doctype html><script></script");
+    try expectConvert("", "<!doctype html><script></script");
+    try expectConvert("", "<!doctype html><script><!");
+    try expectConvert("", "<!doctype html><script><!a");
+    try expectConvert("", "<!doctype html><script><!-");
+    try expectConvert("", "<!doctype html><script><!-a");
+    try expectConvert("", "<!doctype html><script><!--");
+    try expectConvert("", "<!doctype html><script><!--a");
+    try expectConvert("", "<!doctype html><script><!--<");
+    try expectConvert("", "<!doctype html><script><!--<a");
+    try expectConvert("", "<!doctype html><script><!--</");
+    try expectConvert("", "<!doctype html><script><!--</script");
+    try expectConvert("", "<!doctype html><script><!--</script");
+    try expectConvert("", "<!doctype html><script><!--<s");
+    try expectConvert("", "<!doctype html><script><!--<script");
+    try expectConvert("", "<!doctype html><script><!--<script");
+    try expectConvert("", "<!doctype html><script><!--<script <");
+    try expectConvert("", "<!doctype html><script><!--<script <a");
+    try expectConvert("", "<!doctype html><script><!--<script </");
+    try expectConvert("", "<!doctype html><script><!--<script </s");
+    try expectConvert("", "<!doctype html><script><!--<script </script");
+    try expectConvert("", "<!doctype html><script><!--<script </scripta");
+    try expectConvert("", "<!doctype html><script><!--<script </script");
+    try expectConvert("", "<!doctype html><script><!--<script </script>");
+    try expectConvert("", "<!doctype html><script><!--<script </script/");
+    try expectConvert("", "<!doctype html><script><!--<script </script <");
+    try expectConvert("", "<!doctype html><script><!--<script </script <a");
+    try expectConvert("", "<!doctype html><script><!--<script </script </");
+    try expectConvert("", "<!doctype html><script><!--<script </script </script");
+    try expectConvert("", "<!doctype html><script><!--<script </script </script");
+    try expectConvert("", "<!doctype html><script><!--<script </script </script/");
+    try expectConvert("", "<!doctype html><script><!--<script </script </script>");
+    try expectConvert("", "<!doctype html><script><!--<script -");
+    try expectConvert("", "<!doctype html><script><!--<script -a");
+    try expectConvert("", "<!doctype html><script><!--<script -<");
+    try expectConvert("", "<!doctype html><script><!--<script --");
+    try expectConvert("", "<!doctype html><script><!--<script --a");
+    try expectConvert("", "<!doctype html><script><!--<script --<");
+    try expectConvert("", "<!doctype html><script><!--<script -->");
+    try expectConvert("", "<!doctype html><script><!--<script --><");
+    try expectConvert("", "<!doctype html><script><!--<script --></");
+    try expectConvert("", "<!doctype html><script><!--<script --></script");
+    try expectConvert("", "<!doctype html><script><!--<script --></script");
+    try expectConvert("", "<!doctype html><script><!--<script --></script/");
+    try expectConvert("", "<!doctype html><script><!--<script --></script>");
+    try expectConvert("", "<!doctype html><script><!--<script><\\/script>--></script>");
+    try expectConvert("", "<!doctype html><script><!--<script></scr'+'ipt>--></script>");
+    try expectConvert(
+        "",
+        "<!doctype html><script><!--<script></script><script></script></script>",
+    );
+    try expectConvert(
+        "--><!--</script>",
+        "<!doctype html><script><!--<script></script><script></script>--><!--</script>",
+    );
+    try expectConvert(
+        "-- >",
+        "<!doctype html><script><!--<script></script><script></script>-- ></script>",
+    );
+    try expectConvert(
+        "- ->",
+        "<!doctype html><script><!--<script></script><script></script>- -></script>",
+    );
+    try expectConvert(
+        "- - >",
+        "<!doctype html><script><!--<script></script><script></script>- - ></script>",
+    );
+    try expectConvert(
+        "->",
+        "<!doctype html><script><!--<script></script><script></script>-></script>",
+    );
+    try expectConvert("X", "<!doctype html><script><!--<script>--!></script>X");
+    try expectConvert("-->", "<!doctype html><script><!--<scr'+'ipt></script>--></script>");
+    try expectConvert("X", "<!doctype html><script><!--<script></scr'+'ipt></script>X");
+    try expectConvert("-->", "<!doctype html><style><!--<style></style>--></style>");
+    try expectConvert("X", "<!doctype html><style><!--</style>X");
+    try expectConvert("...-->", "<!doctype html><style><!--...</style>...--></style>");
+    try expectConvert(
+        "X",
+        "<!doctype html><style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\">" ++
+            "<!--[if !mso]><style></style>X",
+    );
+    try expectConvert(
+        "-->",
+        "<!doctype html><style><!--...<style><!--...--!></style>--></style>",
+    );
+    try expectConvert(
+        "",
+        "<!doctype html><style><!--...</style><!-- --><style>@import ...</style>",
+    );
+    try expectConvert("", "<!doctype html><style>...<style><!--...</style><!-- --></style>");
+    try expectConvert("X", "<!doctype html><style>...<!--[if IE]><style>...</style>X");
+    try expectConvert("", "<!doctype html><title><!--<title></title>--></title>");
+    try expectConvert("</title>", "<!doctype html><title>&lt;/title></title>");
+    try expectConvert(
+        "foo/title> X",
+        "<!doctype html><title>foo/title><link></head><body>X",
+    );
+    try expectConvert(
+        "",
+        "<!doctype html><noscript><!--<noscript></noscript>--></noscript>",
+    );
+    try expectConvert(
+        "",
+        "<!doctype html><noscript><!--<noscript></noscript>--></noscript>",
+    );
+    try expectConvert(
+        "",
+        "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>",
+    );
+    try expectConvert(
+        "",
+        "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>",
+    );
+    try expectConvert("X", "<!doctype html><noscript><iframe></noscript>X");
+    try expectConvert("X", "<!doctype html><noscript><iframe></noscript>X");
+    try expectConvert(
+        "",
+        "<!doctype html><noframes><!--<noframes></noframes>--></noframes>",
+    );
+    try expectConvert(
+        "",
+        "<!doctype html><noframes><body><script><!--...</script></body></noframes></html>",
+    );
+    try expectConvert(
+        "",
+        "<!doctype html><textarea><!--<textarea></textarea>--></textarea>",
+    );
+    try expectConvert("</textarea>", "<!doctype html><textarea>&lt;/textarea></textarea>");
+    try expectConvert("<", "<!doctype html><textarea>&lt;</textarea>");
+    try expectConvert("a<b", "<!doctype html><textarea>a&lt;b</textarea>");
+    try expectConvert("", "<!doctype html><iframe><!--<iframe></iframe>--></iframe>");
+    try expectConvert("", "<!doctype html><iframe>...<!--X->...<!--/X->...</iframe>");
+    try expectConvert("", "<!doctype html><xmp><!--<xmp></xmp>--></xmp>");
+    try expectConvert("", "<!doctype html><noembed><!--<noembed></noembed>--></noembed>");
+    try expectConvert("", "<script>");
+    try expectConvert("", "<script>a");
+    try expectConvert("", "<script><");
+    try expectConvert("", "<script></");
+    try expectConvert("", "<script></S");
+    try expectConvert("", "<script></SC");
+    try expectConvert("", "<script></SCR");
+    try expectConvert("", "<script></SCRI");
+    try expectConvert("", "<script></SCRIP");
+    try expectConvert("", "<script></SCRIPT");
+    try expectConvert("", "<script></SCRIPT");
+    try expectConvert("", "<script></s");
+    try expectConvert("", "<script></sc");
+    try expectConvert("", "<script></scr");
+    try expectConvert("", "<script></scri");
+    try expectConvert("", "<script></scrip");
+    try expectConvert("", "<script></script");
+    try expectConvert("", "<script></script");
+    try expectConvert("", "<script><!");
+    try expectConvert("", "<script><!a");
+    try expectConvert("", "<script><!-");
+    try expectConvert("", "<script><!-a");
+    try expectConvert("", "<script><!--");
+    try expectConvert("", "<script><!--a");
+    try expectConvert("", "<script><!--<");
+    try expectConvert("", "<script><!--<a");
+    try expectConvert("", "<script><!--</");
+    try expectConvert("", "<script><!--</script");
+    try expectConvert("", "<script><!--</script");
+    try expectConvert("", "<script><!--<s");
+    try expectConvert("", "<script><!--<script");
+    try expectConvert("", "<script><!--<script");
+    try expectConvert("", "<script><!--<script <");
+    try expectConvert("", "<script><!--<script <a");
+    try expectConvert("", "<script><!--<script </");
+    try expectConvert("", "<script><!--<script </s");
+    try expectConvert("", "<script><!--<script </script");
+    try expectConvert("", "<script><!--<script </scripta");
+    try expectConvert("", "<script><!--<script </script");
+    try expectConvert("", "<script><!--<script </script>");
+    try expectConvert("", "<script><!--<script </script/");
+    try expectConvert("", "<script><!--<script </script <");
+    try expectConvert("", "<script><!--<script </script <a");
+    try expectConvert("", "<script><!--<script </script </");
+    try expectConvert("", "<script><!--<script </script </script");
+    try expectConvert("", "<script><!--<script </script </script");
+    try expectConvert("", "<script><!--<script </script </script/");
+    try expectConvert("", "<script><!--<script </script </script>");
+    try expectConvert("", "<script><!--<script -");
+    try expectConvert("", "<script><!--<script -a");
+    try expectConvert("", "<script><!--<script --");
+    try expectConvert("", "<script><!--<script --a");
+    try expectConvert("", "<script><!--<script -->");
+    try expectConvert("", "<script><!--<script --><");
+    try expectConvert("", "<script><!--<script --></");
+    try expectConvert("", "<script><!--<script --></script");
+    try expectConvert("", "<script><!--<script --></script");
+    try expectConvert("", "<script><!--<script --></script/");
+    try expectConvert("", "<script><!--<script --></script>");
+    try expectConvert("", "<script><!--<script><\\/script>--></script>");
+    try expectConvert("", "<script><!--<script></scr'+'ipt>--></script>");
+    try expectConvert("", "<script><!--<script></script><script></script></script>");
+    try expectConvert(
+        "--><!--</script>",
+        "<script><!--<script></script><script></script>--><!--</script>",
+    );
+    try expectConvert("-- >", "<script><!--<script></script><script></script>-- ></script>");
+    try expectConvert("- ->", "<script><!--<script></script><script></script>- -></script>");
+    try expectConvert(
+        "- - >",
+        "<script><!--<script></script><script></script>- - ></script>",
+    );
+    try expectConvert("->", "<script><!--<script></script><script></script>-></script>");
+    try expectConvert("X", "<script><!--<script>--!></script>X");
+    try expectConvert("-->", "<script><!--<scr'+'ipt></script>--></script>");
+    try expectConvert("X", "<script><!--<script></scr'+'ipt></script>X");
+    try expectConvert("-->", "<style><!--<style></style>--></style>");
+    try expectConvert("X", "<style><!--</style>X");
+    try expectConvert("...-->", "<style><!--...</style>...--></style>");
+    try expectConvert(
+        "X",
+        "<style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]>" ++
+            "<style></style>X",
+    );
+    try expectConvert("-->", "<style><!--...<style><!--...--!></style>--></style>");
+    try expectConvert("", "<style><!--...</style><!-- --><style>@import ...</style>");
+    try expectConvert("", "<style>...<style><!--...</style><!-- --></style>");
+    try expectConvert("X", "<style>...<!--[if IE]><style>...</style>X");
+    try expectConvert("", "<title><!--<title></title>--></title>");
+    try expectConvert("</title>", "<title>&lt;/title></title>");
+    try expectConvert("foo/title> X", "<title>foo/title><link></head><body>X");
+    try expectConvert("", "<noscript><!--<noscript></noscript>--></noscript>");
+    try expectConvert("", "<noscript><!--<noscript></noscript>--></noscript>");
+    try expectConvert("", "<noscript><!--</noscript>X<noscript>--></noscript>");
+    try expectConvert("", "<noscript><!--</noscript>X<noscript>--></noscript>");
+    try expectConvert("X", "<noscript><iframe></noscript>X");
+    try expectConvert("X", "<noscript><iframe></noscript>X");
+    try expectConvert("", "<noframes><!--<noframes></noframes>--></noframes>");
+    try expectConvert(
+        "",
+        "<noframes><body><script><!--...</script></body></noframes></html>",
+    );
+    try expectConvert("", "<textarea><!--<textarea></textarea>--></textarea>");
+    try expectConvert("</textarea>", "<textarea>&lt;/textarea></textarea>");
+    try expectConvert("", "<iframe><!--<iframe></iframe>--></iframe>");
+    try expectConvert("", "<iframe>...<!--X->...<!--/X->...</iframe>");
+    try expectConvert("", "<xmp><!--<xmp></xmp>--></xmp>");
+    try expectConvert("", "<noembed><!--<noembed></noembed>--></noembed>");
+    try expectConvert("", "<!doctype html><table>\n");
+    try expectConvert("", "<!doctype html><table><td><span><font></span><span>");
+    try expectConvert("", "<!doctype html><form><table></form><form></table></form>");
 }

@@ -87,24 +87,6 @@ Insights
 Settings
 
 You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert
-{{ message }}
-
-Create list
-
-Create a list to organize your starred repositories.
-
-Name .
-
-32 remaining
-
-Description .
-
-160 remaining
-
-.
-Create
-
-Tip: type : to add emoji to the name or description.
 
 cosmo-crawler Public
 
@@ -119,11 +101,6 @@ Forks could not be loaded
 
 Loading
 
-Unstar this repository?
-
-This will remove {{ repoNameWithOwner }} from the {{ listsWithCount }} that it's been added to.
-
-Unstar
 Starred 1
 
 Lists
