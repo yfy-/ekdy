@@ -366,6 +366,9 @@ pub const TextExtractor = struct {
         attr_val,
         comment,
         plaintext,
+        script,
+        script_escaped,
+        script_double_escaped,
     };
 
     pub fn init(allocator: Allocator, out_writer: *Writer) !Self {
@@ -708,6 +711,40 @@ pub const TextExtractor = struct {
     fn handlePlaintext(self: *Self, html: []const u8) Error!usize {
         try self.out_writer.writeAll(html);
         return html.len;
+    }
+
+    fn handleScript(self: *Self, html: []const u8) Error!usize {
+        const close_tag = "</script";
+        const escape_tok = "<!--";
+        // Script cannot end
+        if (html.len < close_tag.len + 1)
+            return html.len;
+
+        var script_match = false;
+        if (std.mem.eql(u8, html[0..close_tag.len], close_tag)) {
+            for (html[close_tag.len..], 1..) |c, i| {
+                if (c == '>') {
+                    self.state = .text;
+                    return close_tag.len + i;
+                }
+
+                if (!ascii.isWhitespace(c)) {
+                    if (!script_match) return close_tag.len;
+                }
+
+                script_match = true;
+            }
+
+            // Consumed everything
+            return html.len;
+        }
+
+        if (std.mem.eql(u8, html[0..escape_tok.len], escape_tok)) {
+            self.state = .script_escaped;
+            return escape_tok.len;
+        }
+
+        return 1;
     }
 };
 
