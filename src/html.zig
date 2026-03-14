@@ -235,8 +235,8 @@ pub const tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.{}, .{
     .noembed = .{ .is_ignore = true, .is_rawtext = true },
     .noframes = .{ .is_ignore = true, .is_rawtext = true },
 
-    // Ekdy should act as if JS is disabled, therefore we treat
-    // noscript and object as an ordinary tag.
+    // ekdy should act as if JS is disabled, therefore we treat
+    // noscript and object as ordinary tags.
     // .noscript = .{ .is_ignore = true, .is_rawtext = true },
     // .object = .{ .is_ignore = true },
     .picture = .{ .is_ignore = true },
@@ -247,8 +247,8 @@ pub const tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.{}, .{
     .video = .{ .is_ignore = true },
     .plaintext = .{ .is_rawtext = true, .is_void = true },
     .textarea = .{ .is_rcdata = true, .is_preformatted = true },
-    .title = .{ .is_rcdata = true },
-    .xmp = .{ .is_rawtext = true, .is_preformatted = true },
+    .title = .{ .is_rcdata = true, .whitespace = .double_break },
+    .xmp = .{ .is_rawtext = true, .is_preformatted = true, .whitespace = .double_break },
     .caption = .{ .whitespace = .single_break },
     .colgroup = .{ .whitespace = .single_break },
     .datalist = .{ .whitespace = .single_break },
@@ -405,6 +405,9 @@ pub const TextExtractor = struct {
                 .attr_val => self.handleAttrVal(curr_html),
                 .comment => self.handleComment(curr_html),
                 .plaintext => self.handlePlaintext(curr_html),
+                .script => self.handleScript(curr_html),
+                .script_escaped => self.handleScriptEscaped(curr_html),
+                .script_double_escaped => self.handleScriptDoubleEscaped(curr_html),
             };
         }
         self.cursor -= html.len;
@@ -431,6 +434,12 @@ pub const TextExtractor = struct {
         const c = html[0];
         const tag = self.stack.getLastOrNull();
         const tag_prop = if (tag) |t| tag_properties.get(t) else null;
+
+        // Script is special.
+        if (tag != null and tag.? == .script) {
+            self.state = .script;
+            return 0;
+        }
 
         if (c == '<') {
             if (tag == null or (!tag_prop.?.is_rawtext and !tag_prop.?.is_rcdata)) {
@@ -713,35 +722,111 @@ pub const TextExtractor = struct {
         return html.len;
     }
 
-    fn handleScript(self: *Self, html: []const u8) Error!usize {
-        const close_tag = "</script";
-        const escape_tok = "<!--";
-        // Script cannot end
-        if (html.len < close_tag.len + 1)
+    // Check if given tag prefix is proper tag. For example if
+    // '</script' is given will try to match a proper </script> tag by
+    // relying to the rules of tag matching (whitespace etc.). If
+    // there is no match will return 0, otherwise will return number
+    // of bytes that points after the tag match. This function is
+    // useful to avoid complex script sub-state machine, rather than
+    // having a full sub-state machine this helper handles boilerplate
+    // tag matching logic.
+    fn checkTagPrefixMatch(html: []const u8, tag_prefix: []const u8) usize {
+        if (html.len < tag_prefix.len + 1)
             return html.len;
+
+        if (!std.mem.eql(u8, html[0..tag_prefix.len], tag_prefix))
+            return 0;
 
         var script_match = false;
-        if (std.mem.eql(u8, html[0..close_tag.len], close_tag)) {
-            for (html[close_tag.len..], 1..) |c, i| {
-                if (c == '>') {
-                    self.state = .text;
-                    return close_tag.len + i;
-                }
+        for (html[tag_prefix.len..], 1..) |c, i| {
+            if (c == '>')
+                return tag_prefix.len + i;
 
-                if (!ascii.isWhitespace(c)) {
-                    if (!script_match) return close_tag.len;
-                }
+            if (!ascii.isWhitespace(c))
+                if (!script_match) return tag_prefix.len;
 
-                script_match = true;
-            }
-
-            // Consumed everything
-            return html.len;
+            script_match = true;
         }
 
+        // Consumed everything
+        return html.len;
+    }
+
+
+    // Handle exit from a script tag here.
+    fn endScript(self: *Self) void {
+        // Stack must have the script tag
+        const st = self.stack.pop() orelse unreachable;
+        if (st != .script)
+            unreachable;
+
+        self.state = .text;
+        self.ignore_depth -|= 1;
+    }
+
+    // <script>ekdy...</script>
+    //         ^~~~~~~
+    // FIXME: This part cannot be simply converted to SIMD.
+    // for SIMD we need to first look for a '<' match.
+    fn handleScript(self: *Self, html: []const u8) Error!usize {
+        const check_adv = checkTagPrefixMatch(html, "</script");
+        if (check_adv > 0) {
+	    self.endScript();
+            return check_adv;
+        }
+
+        const escape_tok = "<!--";
         if (std.mem.eql(u8, html[0..escape_tok.len], escape_tok)) {
             self.state = .script_escaped;
             return escape_tok.len;
+        }
+
+        return 1;
+    }
+
+    // <script>ekdy <!-- ekdy....
+    //                  ^~~~~~~~~
+    fn handleScriptEscaped(self: *Self, html: []const u8) Error!usize {
+        const esc_end_tok = "-->";
+        if (html.len < esc_end_tok.len)
+            return html.len;
+
+        if (std.mem.eql(u8, html[0..esc_end_tok.len], esc_end_tok)) {
+            self.state = .script;
+            return esc_end_tok.len;
+        }
+
+        const start_adv = checkTagPrefixMatch(html, "<script");
+        if (start_adv > 0) {
+            self.state = .script_double_escaped;
+            return start_adv;
+        }
+
+        const end_adv = checkTagPrefixMatch(html, "</script");
+        if (end_adv > 0) {
+	    self.endScript();
+            return end_adv;
+        }
+
+        return 1;
+    }
+
+    // <script>ekdy <!-- ... <script> ekdy...
+    //                               ^~~~~~~~
+    fn handleScriptDoubleEscaped(self: *Self, html: []const u8) Error!usize {
+        const esc_end_tok = "-->";
+        if (html.len < esc_end_tok.len)
+            return html.len;
+
+        if (std.mem.eql(u8, html[0..esc_end_tok.len], esc_end_tok)) {
+            self.state = .script;
+            return esc_end_tok.len;
+        }
+
+        const end_adv = checkTagPrefixMatch(html, "</script");
+        if (end_adv > 0) {
+            self.state = .script_escaped;
+            return end_adv;
         }
 
         return 1;
@@ -1058,7 +1143,7 @@ test "html5lib_tests1" {
     try expectConvert("aaaabbaa", "<a href=a>aa<marquee>aa<a href=b>bb</marquee>aa");
     try expectConvert("", "<wbr><strike><code></strike><code><strike></code>");
     try expectConvert("foo", "<!DOCTYPE html><spacer>foo");
-    try expectConvert("<meta><meta>", "<title><meta></title><link><title><meta></title>");
+    try expectConvert("<meta>\n\n<meta>", "<title><meta></title><link><title><meta></title>");
     try expectConvert("", "<style><!--</style><meta><script>--><link></script>");
     try expectConvert("", "<head><meta></head><link>");
     try expectConvert("X", "<table><tr><tr><td><td><span><th><span>X</table>");
@@ -1275,7 +1360,7 @@ test "html5lib_tests4" {
     try expectConvert("", "</plaintext>");
     try expectConvert("setting html's innerHTML", "setting html's innerHTML");
     try expectConvert("setting head's innerHTML", "<title>setting head's innerHTML</title>");
-    try expectConvert("direct content", "direct <title> content");
+    try expectConvert("direct\n\ncontent", "direct <title> content");
     try expectConvert("", "<!-- inside </script> -->");
 }
 
@@ -1287,7 +1372,7 @@ test "html5lib_tests5" {
     try expectConvert("x", "<iframe> <!---> </iframe>x");
     try expectConvert("->x --> x", "<iframe> <!--- </iframe>->x</iframe> --> </iframe>x");
     try expectConvert("--> x", "<script> <!-- </script> --> </script>x");
-    try expectConvert("<!-- --> x", "<title> <!-- </title> --> </title>x");
+    try expectConvert("<!--\n\n--> x", "<title> <!-- </title> --> </title>x");
     try expectConvert(
         " <!--- ->x --> x",
         "<textarea> <!--- </textarea>->x</textarea> --> </textarea>x",
@@ -1930,28 +2015,28 @@ test "html5lib_tests16" {
         "<!doctype html><script><!--<script></script><script></script></script>",
     );
     try expectConvert(
-        "--><!--</script>",
+        "",
         "<!doctype html><script><!--<script></script><script></script>--><!--</script>",
     );
     try expectConvert(
-        "-- >",
+        "",
         "<!doctype html><script><!--<script></script><script></script>-- ></script>",
     );
     try expectConvert(
-        "- ->",
+        "",
         "<!doctype html><script><!--<script></script><script></script>- -></script>",
     );
     try expectConvert(
-        "- - >",
+        "",
         "<!doctype html><script><!--<script></script><script></script>- - ></script>",
     );
     try expectConvert(
-        "->",
+        "",
         "<!doctype html><script><!--<script></script><script></script>-></script>",
     );
-    try expectConvert("X", "<!doctype html><script><!--<script>--!></script>X");
+    try expectConvert("", "<!doctype html><script><!--<script>--!></script>X");
     try expectConvert("-->", "<!doctype html><script><!--<scr'+'ipt></script>--></script>");
-    try expectConvert("X", "<!doctype html><script><!--<script></scr'+'ipt></script>X");
+    try expectConvert("", "<!doctype html><script><!--<script></scr'+'ipt></script>X");
     try expectConvert("-->", "<!doctype html><style><!--<style></style>--></style>");
     try expectConvert("X", "<!doctype html><style><!--</style>X");
     try expectConvert("...-->", "<!doctype html><style><!--...</style>...--></style>");
@@ -1970,10 +2055,10 @@ test "html5lib_tests16" {
     );
     try expectConvert("", "<!doctype html><style>...<style><!--...</style><!-- --></style>");
     try expectConvert("X", "<!doctype html><style>...<!--[if IE]><style>...</style>X");
-    try expectConvert("", "<!doctype html><title><!--<title></title>--></title>");
+    try expectConvert("<!--<title>\n\n-->", "<!doctype html><title><!--<title></title>--></title>");
     try expectConvert("</title>", "<!doctype html><title>&lt;/title></title>");
     try expectConvert(
-        "foo/title> X",
+        "foo/title><link></head><body>X",
         "<!doctype html><title>foo/title><link></head><body>X",
     );
     try expectConvert(
@@ -1992,10 +2077,10 @@ test "html5lib_tests16" {
         "",
         "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>",
     );
-    try expectConvert("X", "<!doctype html><noscript><iframe></noscript>X");
-    try expectConvert("X", "<!doctype html><noscript><iframe></noscript>X");
+    try expectConvert("", "<!doctype html><noscript><iframe></noscript>X");
+    try expectConvert("", "<!doctype html><noscript><iframe></noscript>X");
     try expectConvert(
-        "",
+        "-->",
         "<!doctype html><noframes><!--<noframes></noframes>--></noframes>",
     );
     try expectConvert(
@@ -2003,16 +2088,16 @@ test "html5lib_tests16" {
         "<!doctype html><noframes><body><script><!--...</script></body></noframes></html>",
     );
     try expectConvert(
-        "",
+        "<!--<textarea>-->",
         "<!doctype html><textarea><!--<textarea></textarea>--></textarea>",
     );
     try expectConvert("</textarea>", "<!doctype html><textarea>&lt;/textarea></textarea>");
     try expectConvert("<", "<!doctype html><textarea>&lt;</textarea>");
     try expectConvert("a<b", "<!doctype html><textarea>a&lt;b</textarea>");
-    try expectConvert("", "<!doctype html><iframe><!--<iframe></iframe>--></iframe>");
+    try expectConvert("-->", "<!doctype html><iframe><!--<iframe></iframe>--></iframe>");
     try expectConvert("", "<!doctype html><iframe>...<!--X->...<!--/X->...</iframe>");
-    try expectConvert("", "<!doctype html><xmp><!--<xmp></xmp>--></xmp>");
-    try expectConvert("", "<!doctype html><noembed><!--<noembed></noembed>--></noembed>");
+    try expectConvert("<!--<xmp>\n\n-->", "<!doctype html><xmp><!--<xmp></xmp>--></xmp>");
+    try expectConvert("-->", "<!doctype html><noembed><!--<noembed></noembed>--></noembed>");
     try expectConvert("", "<script>");
     try expectConvert("", "<script>a");
     try expectConvert("", "<script><");
@@ -2076,19 +2161,19 @@ test "html5lib_tests16" {
     try expectConvert("", "<script><!--<script></scr'+'ipt>--></script>");
     try expectConvert("", "<script><!--<script></script><script></script></script>");
     try expectConvert(
-        "--><!--</script>",
+        "",
         "<script><!--<script></script><script></script>--><!--</script>",
     );
-    try expectConvert("-- >", "<script><!--<script></script><script></script>-- ></script>");
-    try expectConvert("- ->", "<script><!--<script></script><script></script>- -></script>");
+    try expectConvert("", "<script><!--<script></script><script></script>-- ></script>");
+    try expectConvert("", "<script><!--<script></script><script></script>- -></script>");
     try expectConvert(
-        "- - >",
+        "",
         "<script><!--<script></script><script></script>- - ></script>",
     );
-    try expectConvert("->", "<script><!--<script></script><script></script>-></script>");
-    try expectConvert("X", "<script><!--<script>--!></script>X");
+    try expectConvert("", "<script><!--<script></script><script></script>-></script>");
+    try expectConvert("", "<script><!--<script>--!></script>X");
     try expectConvert("-->", "<script><!--<scr'+'ipt></script>--></script>");
-    try expectConvert("X", "<script><!--<script></scr'+'ipt></script>X");
+    try expectConvert("", "<script><!--<script></scr'+'ipt></script>X");
     try expectConvert("-->", "<style><!--<style></style>--></style>");
     try expectConvert("X", "<style><!--</style>X");
     try expectConvert("...-->", "<style><!--...</style>...--></style>");
@@ -2101,26 +2186,25 @@ test "html5lib_tests16" {
     try expectConvert("", "<style><!--...</style><!-- --><style>@import ...</style>");
     try expectConvert("", "<style>...<style><!--...</style><!-- --></style>");
     try expectConvert("X", "<style>...<!--[if IE]><style>...</style>X");
-    try expectConvert("", "<title><!--<title></title>--></title>");
+    try expectConvert("<!--<title>\n\n-->", "<title><!--<title></title>--></title>");
     try expectConvert("</title>", "<title>&lt;/title></title>");
-    try expectConvert("foo/title> X", "<title>foo/title><link></head><body>X");
+    try expectConvert("foo/title><link></head><body>X", "<title>foo/title><link></head><body>X");
     try expectConvert("", "<noscript><!--<noscript></noscript>--></noscript>");
     try expectConvert("", "<noscript><!--<noscript></noscript>--></noscript>");
     try expectConvert("", "<noscript><!--</noscript>X<noscript>--></noscript>");
     try expectConvert("", "<noscript><!--</noscript>X<noscript>--></noscript>");
-    try expectConvert("X", "<noscript><iframe></noscript>X");
-    try expectConvert("X", "<noscript><iframe></noscript>X");
-    try expectConvert("", "<noframes><!--<noframes></noframes>--></noframes>");
+    try expectConvert("", "<noscript><iframe></noscript>X");
+    try expectConvert("-->", "<noframes><!--<noframes></noframes>--></noframes>");
     try expectConvert(
         "",
         "<noframes><body><script><!--...</script></body></noframes></html>",
     );
-    try expectConvert("", "<textarea><!--<textarea></textarea>--></textarea>");
+    try expectConvert("<!--<textarea>-->", "<textarea><!--<textarea></textarea>--></textarea>");
     try expectConvert("</textarea>", "<textarea>&lt;/textarea></textarea>");
-    try expectConvert("", "<iframe><!--<iframe></iframe>--></iframe>");
+    try expectConvert("-->", "<iframe><!--<iframe></iframe>--></iframe>");
     try expectConvert("", "<iframe>...<!--X->...<!--/X->...</iframe>");
-    try expectConvert("", "<xmp><!--<xmp></xmp>--></xmp>");
-    try expectConvert("", "<noembed><!--<noembed></noembed>--></noembed>");
+    try expectConvert("<!--<xmp>\n\n-->", "<xmp><!--<xmp></xmp>--></xmp>");
+    try expectConvert("-->", "<noembed><!--<noembed></noembed>--></noembed>");
     try expectConvert("", "<!doctype html><table>\n");
     try expectConvert("", "<!doctype html><table><td><span><font></span><span>");
     try expectConvert("", "<!doctype html><form><table></form><form></table></form>");
