@@ -1,0 +1,16 @@
+#data
+<isindex>
+#text
+
+#data
+<isindex name="A" action="B" prompt="C" foo="D">
+#text
+
+#data
+<form><isindex>
+#text
+
+#data
+<!doctype html><isindex>x</isindex>x
+#text
+xx

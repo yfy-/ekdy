@@ -1,0 +1,139 @@
+#data
+<!doctype html><body><title>X</title>
+#text
+
+#data
+<!doctype html><table><title>X</title></table>
+#text
+
+#data
+<!doctype html><head></head><title>X</title>
+#text
+
+#data
+<!doctype html></head><title>X</title>
+#text
+
+#data
+<!doctype html></head><base>X
+#text
+X
+#data
+<!doctype html></head><basefont>X
+#text
+X
+#data
+<!doctype html></head><bgsound>X
+#text
+X
+#data
+<!doctype html><table><meta></table>
+#text
+
+#data
+<!doctype html><table>X<tr><td><table> <meta></table></table>
+#text
+X
+#data
+<!doctype html><html> <head>
+#text
+
+#data
+<!doctype html> <head>
+#text
+
+#data
+<!doctype html><table><style> <tr>x </style> </table>
+#text
+
+#data
+<!doctype html><table><TBODY><script> <tr>x </script> </table>
+#text
+
+#data
+<!doctype html><p><applet><p>X</p></applet>
+#text
+X
+#data
+<!doctype html><p><object type="application/x-non-existant-plugin"><p>X</p></object>
+#text
+X
+#data
+<!doctype html><listing>
+X</listing>
+#text
+X
+#data
+<!doctype html><select><input>X
+#text
+X
+#data
+<!doctype html><select><select>X
+#text
+X
+#data
+<!doctype html><table><input type=hidDEN></table>
+#text
+
+#data
+<!doctype html><table>X<input type=hidDEN></table>
+#text
+X
+#data
+<!doctype html><table>  <input type=hidDEN></table>
+#text
+
+#data
+<!doctype html><table>  <input type='hidDEN'></table>
+#text
+
+#data
+<!doctype html><table><input type=" hidden"><input type=hidDEN></table>
+#text
+
+#data
+<!doctype html><table><select>X<tr>
+#text
+
+#data
+<!doctype html><select>X</select>
+#text
+
+#data
+<!DOCTYPE hTmL><html></html>
+#text
+
+#data
+<!DOCTYPE HTML><html></html>
+#text
+
+#data
+<body>X</body></body>
+#text
+X
+#data
+<div><p>a</x> b
+#text
+a b
+#data
+<table><tr><td><code></code> </table>
+#text
+
+#data
+<table><b><tr><td>aaa</td></tr>bbb</table>ccc
+#text
+bbb
+aaa
+ccc
+#data
+A<table><tr> B</tr> B</table>
+#text
+A B B
+#data
+A<table><tr> B</tr> </em>C</table>
+#text
+A BC
+#data
+<select><keygen>
+#text
+

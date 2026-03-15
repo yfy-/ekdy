@@ -1,0 +1,112 @@
+#data
+<head></head><style></style>
+#text
+
+#data
+<head></head><script></script>
+#text
+
+#data
+<head></head><!-- --><style></style><!-- --><script></script>
+#text
+
+#data
+<head></head><!-- -->x<style></style><!-- --><script></script>
+#text
+x
+#data
+<!DOCTYPE html><html><head></head><body><pre>
+</pre></body></html>
+#text
+
+#data
+<!DOCTYPE html><html><head></head><body><pre>
+foo</pre></body></html>
+#text
+foo
+#data
+<!DOCTYPE html><html><head></head><body><pre>
+
+foo</pre></body></html>
+#text
+foo
+#data
+<!DOCTYPE html><html><head></head><body><pre>
+foo
+</pre></body></html>
+#text
+foo
+#data
+<!DOCTYPE html><html><head></head><body><pre>x</pre><span>
+</span></body></html>
+#text
+x
+#data
+<!DOCTYPE html><html><head></head><body><pre>x
+y</pre></body></html>
+#text
+x
+y
+#data
+<!DOCTYPE html><html><head></head><body><pre>x<div>
+y</pre></body></html>
+#text
+x
+
+y
+#data
+<!DOCTYPE html><pre>&#x0a;&#x0a;A</pre>
+#text
+A
+#data
+<!DOCTYPE html><HTML><META><HEAD></HEAD></HTML>
+#text
+
+#data
+<!DOCTYPE html><HTML><HEAD><head></HEAD></HTML>
+#text
+
+#data
+<textarea>foo<span>bar</span><i>baz
+#text
+
+#data
+<title>foo<span>bar</em><i>baz
+#text
+
+#data
+<!DOCTYPE html><textarea>
+</textarea>
+#text
+
+#data
+<!DOCTYPE html><textarea>
+foo</textarea>
+#text
+
+#data
+<!DOCTYPE html><textarea>
+
+foo</textarea>
+#text
+
+#data
+<!DOCTYPE html><html><head></head><body><ul><li><div><p><li></ul></body></html>
+#text
+
+#data
+<!doctype html><nobr><nobr><nobr>
+#text
+
+#data
+<!doctype html><nobr><nobr></nobr><nobr>
+#text
+
+#data
+<!doctype html><html><body><p><table></table></body></html>
+#text
+
+#data
+<p><table></table>
+#text
+

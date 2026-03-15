@@ -1,0 +1,485 @@
+#data
+Test
+#text
+Test
+#data
+<p>One<p>Two
+#text
+One
+
+Two
+#data
+Line1<br>Line2<br>Line3<br>Line4
+#text
+Line1
+Line2
+Line3
+Line4
+#data
+<html>
+#text
+
+#data
+<head>
+#text
+
+#data
+<body>
+#text
+
+#data
+<html><head>
+#text
+
+#data
+<html><head></head>
+#text
+
+#data
+<html><head></head><body>
+#text
+
+#data
+<html><head></head><body></body>
+#text
+
+#data
+<html><head><body></body></html>
+#text
+
+#data
+<html><head></body></html>
+#text
+
+#data
+<html><head><body></html>
+#text
+
+#data
+<html><body></html>
+#text
+
+#data
+<body></html>
+#text
+
+#data
+<head></html>
+#text
+
+#data
+</head>
+#text
+
+#data
+</body>
+#text
+
+#data
+</html>
+#text
+
+#data
+<b><table><td><i></table>
+#text
+
+#data
+<b><table><td></b><i></table>X
+#text
+X
+#data
+<h1>Hello<h2>World
+#text
+Hello
+World
+#data
+<a><p>X<a>Y</a>Z</p></a>
+#text
+XYZ
+#data
+<b><button>foo</b>bar
+#text
+foobar
+#data
+<!DOCTYPE html><span><button>foo</span>bar
+#text
+foobar
+#data
+<p><b><div><marquee></p></b></div>X
+#text
+X
+#data
+<script><div></script></div><title><p></title><p><p>
+#text
+
+#data
+<!--><div>--<!-->
+#text
+--
+#data
+<p><hr></p>
+#text
+
+#data
+<select><b><option><select><option></b></select>X
+#text
+X
+#data
+<a><table><td><a><table></table><a></tr><a></table><b>X</b>C<a>Y
+#text
+XCY
+#data
+<a X>0<b>1<a Y>2
+#text
+012
+#data
+<!-----><font><div>hello<table>excite!<b>me!<th><i>please!</tr><!--X-->
+#text
+helloexcite!me!
+please!
+#data
+<!DOCTYPE html><li>hello<li>world<ul>how<li>do</ul>you</body><!--do-->
+#text
+hello
+world
+how
+do
+you
+#data
+<!DOCTYPE html>A<option>B<optgroup>C<select>D</option>E
+#text
+A
+B
+C
+#data
+<
+#text
+<
+#data
+<#
+#text
+<#
+#data
+</
+#text
+</
+#data
+</#
+#text
+
+#data
+<?
+#text
+
+#data
+<?#
+#text
+
+#data
+<!
+#text
+
+#data
+<!#
+#text
+
+#data
+<?COMMENT?>
+#text
+
+#data
+<!COMMENT>
+#text
+
+#data
+</ COMMENT >
+#text
+
+#data
+<?COM--MENT?>
+#text
+
+#data
+<!COM--MENT>
+#text
+
+#data
+</ COM--MENT >
+#text
+
+#data
+<!DOCTYPE html><style> EOF
+#text
+
+#data
+<!DOCTYPE html><script> <!-- </script> --> </script> EOF
+#text
+--> EOF
+#data
+<b><p></b>TEST
+#text
+TEST
+#data
+<p id=a><b><p id=b></b>TEST
+#text
+TEST
+#data
+<b id=a><p><b id=b></p></b>TEST
+#text
+TEST
+#data
+<!DOCTYPE html><title>U-test</title><body><div><p>Test<u></p></div></body>
+#text
+Test
+#data
+<!DOCTYPE html><font><table></font></table></font>
+#text
+
+#data
+<font><p>hello<b>cruel</font>world
+#text
+hellocruelworld
+#data
+<b>Test</i>Test
+#text
+TestTest
+#data
+<b>A<cite>B<div>C
+#text
+AB
+C
+#data
+<b>A<cite>B<div>C</cite>D
+#text
+AB
+CD
+#data
+<b>A<cite>B<div>C</b>D
+#text
+AB
+CD
+#data
+
+#text
+
+#data
+<DIV>
+#text
+
+#data
+<DIV> abc
+#text
+abc
+#data
+<DIV> abc <B>
+#text
+abc
+#data
+<DIV> abc <B> def
+#text
+abc def
+#data
+<DIV> abc <B> def <I>
+#text
+abc def
+#data
+<DIV> abc <B> def <I> ghi
+#text
+abc def ghi
+#data
+<DIV> abc <B> def <I> ghi <P>
+#text
+abc def ghi
+#data
+<DIV> abc <B> def <I> ghi <P> jkl
+#text
+abc def ghi
+
+jkl
+#data
+<DIV> abc <B> def <I> ghi <P> jkl </B>
+#text
+abc def ghi
+
+jkl
+#data
+<DIV> abc <B> def <I> ghi <P> jkl </B> mno
+#text
+abc def ghi
+
+jkl mno
+#data
+<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I>
+#text
+abc def ghi
+
+jkl mno
+#data
+<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr
+#text
+abc def ghi
+
+jkl mno pqr
+#data
+<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P>
+#text
+abc def ghi
+
+jkl mno pqr
+#data
+<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P> stu
+#text
+abc def ghi
+
+jkl mno pqr
+
+stu
+#data
+<test attribute---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------->
+#text
+
+#data
+<a href="blah">aba<table><a href="foo">br<tr><td></td></tr>x</table>aoe
+#text
+ababrx
+aoe
+#data
+<a href="blah">aba<table><tr><td><a href="foo">br</td></tr>x</table>aoe
+#text
+abax
+br
+aoe
+#data
+<table><a href="blah">aba<tr><td><a href="foo">br</td></tr>x</table>aoe
+#text
+abax
+br
+aoe
+#data
+<a href=a>aa<marquee>aa<a href=b>bb</marquee>aa
+#text
+aaaabbaa
+#data
+<wbr><strike><code></strike><code><strike></code>
+#text
+
+#data
+<!DOCTYPE html><spacer>foo
+#text
+foo
+#data
+<title><meta></title><link><title><meta></title>
+#text
+
+#data
+<style><!--</style><meta><script>--><link></script>
+#text
+
+#data
+<head><meta></head><link>
+#text
+
+#data
+<table><tr><tr><td><td><span><th><span>X</table>
+#text
+X
+#data
+<body><body><base><link><meta><title><p></title><body><p></body>
+#text
+
+#data
+<textarea><p></textarea>
+#text
+
+#data
+<p><image></p>
+#text
+
+#data
+<a><table><a></table><p><a><div><a>
+#text
+
+#data
+<head></p><meta><p>
+#text
+
+#data
+<head></html><meta><p>
+#text
+
+#data
+<b><table><td></b><i></table>
+#text
+
+#data
+<h1><h2>
+#text
+
+#data
+<a><p><a></a></p></a>
+#text
+
+#data
+<b><button></b></button></b>
+#text
+
+#data
+<p><b><div><marquee></p></b></div>
+#text
+
+#data
+<script></script></div><title></title><p><p>
+#text
+
+#data
+<select><b><option><select><option></b></select>
+#text
+
+#data
+<html><head><title></title><body></body></html>
+#text
+
+#data
+<a><table><td><a><table></table><a></tr><a></table><a>
+#text
+
+#data
+<ul><li></li><div><li></div><li><li><div><li><address><li><b><em></b><li></ul>
+#text
+
+#data
+<ul><li><ul></li><li>a</li></ul></li></ul>
+#text
+a
+#data
+<frameset><frame><frameset><frame></frameset><noframes></noframes></frameset>
+#text
+
+#data
+<h1><table><td><h3></table><h3></h1>
+#text
+
+#data
+<table><colgroup><col><colgroup><col><col><col><colgroup><col><col><thead><tr><td></table>
+#text
+
+#data
+<table><col><tbody><col><tr><col><td><col></table><col>
+#text
+
+#data
+<table><colgroup><tbody><colgroup><tr><colgroup><td><colgroup></table><colgroup>
+#text
+
+#data
+</strong></b></em></i></u></strike></s></blink></tt></pre></big></small></font></select></h1></h2></h3></h4></h5></h6></body></br></a></img></title></span></style></script></table></th></td></tr></frame></area></link></param></hr></input></col></base></meta></basefont></bgsound></embed></spacer></p></dd></dt></caption></colgroup></tbody></tfoot></thead></address></blockquote></center></dir></div></dl></fieldset></listing></menu></ol></ul></li></nobr></wbr></form></button></marquee></object></html></frameset></head></iframe></image></isindex></noembed></noframes></noscript></optgroup></option></plaintext></textarea>
+#text
+
+#data
+<table><tr></strong></b></em></i></u></strike></s></blink></tt></pre></big></small></font></select></h1></h2></h3></h4></h5></h6></body></br></a></img></title></span></style></script></table></th></td></tr></frame></area></link></param></hr></input></col></base></meta></basefont></bgsound></embed></spacer></p></dd></dt></caption></colgroup></tbody></tfoot></thead></address></blockquote></center></dir></div></dl></fieldset></listing></menu></ol></ul></li></nobr></wbr></form></button></marquee></object></html></frameset></head></iframe></image></isindex></noembed></noframes></noscript></optgroup></option></plaintext></textarea>
+#text
+
+#data
+<frameset>
+#text
+

@@ -1,0 +1,104 @@
+#data
+<!DOCTYPE html><body><foo>A
+#text
+A
+#data
+<!DOCTYPE html><body><area>A
+#text
+A
+#data
+<!DOCTYPE html><body><base>A
+#text
+A
+#data
+<!DOCTYPE html><body><basefont>A
+#text
+A
+#data
+<!DOCTYPE html><body><bgsound>A
+#text
+A
+#data
+<!DOCTYPE html><body><br>A
+#text
+A
+#data
+<!DOCTYPE html><body><col>A
+#text
+A
+#data
+<!DOCTYPE html><body><command>A
+#text
+A
+#data
+<!DOCTYPE html><body><embed>A
+#text
+A
+#data
+<!DOCTYPE html><body><frame>A
+#text
+A
+#data
+<!DOCTYPE html><body><hr>A
+#text
+A
+#data
+<!DOCTYPE html><body><img>A
+#text
+A
+#data
+<!DOCTYPE html><body><input>A
+#text
+A
+#data
+<!DOCTYPE html><body><keygen>A
+#text
+A
+#data
+<!DOCTYPE html><keygen>A</keygen>B
+#text
+AB
+#data
+</keygen>A
+#text
+A
+#data
+<!DOCTYPE html></keygen>A
+#text
+A
+#data
+<!DOCTYPE html><head></keygen>A
+#text
+A
+#data
+<!DOCTYPE html><head></head></keygen>A
+#text
+A
+#data
+<!DOCTYPE html><body></keygen>A
+#text
+A
+#data
+<!DOCTYPE html><body><link>A
+#text
+A
+#data
+<!DOCTYPE html><body><meta>A
+#text
+A
+#data
+<!DOCTYPE html><body><param>A
+#text
+A
+#data
+<!DOCTYPE html><body><source>A
+#text
+A
+#data
+<!DOCTYPE html><body><track>A
+#text
+A
+#data
+<!DOCTYPE html><body><wbr>A
+#text
+A

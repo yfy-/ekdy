@@ -1,0 +1,155 @@
+#data
+<!DOCTYPE html>Hello
+#text
+Hello
+#data
+<!dOctYpE HtMl>Hello
+#text
+Hello
+#data
+<!DOCTYPEhtml>Hello
+#text
+Hello
+#data
+<!DOCTYPE>Hello
+#text
+Hello
+#data
+<!DOCTYPE >Hello
+#text
+Hello
+#data
+<!DOCTYPE potato>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato >Hello
+#text
+Hello
+#data
+<!DOCTYPE potato taco>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato taco "ddd>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato sYstEM>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato sYstEM    >Hello
+#text
+Hello
+#data
+<!DOCTYPE   potato       sYstEM  ggg>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato SYSTEM taco  >Hello
+#text
+Hello
+#data
+<!DOCTYPE potato SYSTEM 'taco"'>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato SYSTEM "taco">Hello
+#text
+Hello
+#data
+<!DOCTYPE potato SYSTEM "tai'co">Hello
+#text
+Hello
+#data
+<!DOCTYPE potato SYSTEMtaco "ddd">Hello
+#text
+Hello
+#data
+<!DOCTYPE potato grass SYSTEM taco>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato pUbLIc>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato pUbLIc >Hello
+#text
+Hello
+#data
+<!DOCTYPE potato pUbLIcgoof>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato PUBLIC goof>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato PUBLIC "go'of">Hello
+#text
+Hello
+#data
+<!DOCTYPE potato PUBLIC 'go'of'>Hello
+#text
+Hello
+#data
+<!DOCTYPE potato PUBLIC 'go:hh   of' >Hello
+#text
+Hello
+#data
+<!DOCTYPE potato PUBLIC "W3C-//dfdf" SYSTEM ggg>Hello
+#text
+Hello
+#data
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd">Hello
+#text
+Hello
+#data
+<!DOCTYPE ...>Hello
+#text
+Hello
+#data
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+#text
+
+#data
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Frameset//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd">
+#text
+
+#data
+<!DOCTYPE root-element [SYSTEM OR PUBLIC FPI] "uri" [
+<!-- internal declarations -->
+]>
+#text
+]>
+#data
+<!DOCTYPE html PUBLIC
+  "-//WAPFORUM//DTD XHTML Mobile 1.0//EN"
+    "http://www.wapforum.org/DTD/xhtml-mobile10.dtd">
+#text
+
+#data
+<!DOCTYPE HTML SYSTEM "http://www.w3.org/DTD/HTML4-strict.dtd"><body><b>Mine!</b></body>
+#text
+Mine!
+#data
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN""http://www.w3.org/TR/html4/strict.dtd">
+#text
+
+#data
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"'http://www.w3.org/TR/html4/strict.dtd'>
+#text
+
+#data
+<!DOCTYPE HTML PUBLIC"-//W3C//DTD HTML 4.01//EN"'http://www.w3.org/TR/html4/strict.dtd'>
+#text
+
+#data
+<!DOCTYPE HTML PUBLIC'-//W3C//DTD HTML 4.01//EN''http://www.w3.org/TR/html4/strict.dtd'>
+#text
+

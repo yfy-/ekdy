@@ -1,0 +1,256 @@
+#data
+<!doctype html><p><button><button>
+#text
+
+#data
+<!doctype html><p><button><address>
+#text
+
+#data
+<!doctype html><p><button><article>
+#text
+
+#data
+<!doctype html><p><button><aside>
+#text
+
+#data
+<!doctype html><p><button><blockquote>
+#text
+
+#data
+<!doctype html><p><button><center>
+#text
+
+#data
+<!doctype html><p><button><details>
+#text
+
+#data
+<!doctype html><p><button><dialog>
+#text
+
+#data
+<!doctype html><p><button><dir>
+#text
+
+#data
+<!doctype html><p><button><div>
+#text
+
+#data
+<!doctype html><p><button><dl>
+#text
+
+#data
+<!doctype html><p><button><fieldset>
+#text
+
+#data
+<!doctype html><p><button><figcaption>
+#text
+
+#data
+<!doctype html><p><button><figure>
+#text
+
+#data
+<!doctype html><p><button><footer>
+#text
+
+#data
+<!doctype html><p><button><header>
+#text
+
+#data
+<!doctype html><p><button><hgroup>
+#text
+
+#data
+<!doctype html><p><button><main>
+#text
+
+#data
+<!doctype html><p><button><menu>
+#text
+
+#data
+<!doctype html><p><button><nav>
+#text
+
+#data
+<!doctype html><p><button><ol>
+#text
+
+#data
+<!doctype html><p><button><p>
+#text
+
+#data
+<!doctype html><p><button><search>
+#text
+
+#data
+<!doctype html><p><button><section>
+#text
+
+#data
+<!doctype html><p><button><summary>
+#text
+
+#data
+<!doctype html><p><button><ul>
+#text
+
+#data
+<!doctype html><p><button><h1>
+#text
+
+#data
+<!doctype html><p><button><h6>
+#text
+
+#data
+<!doctype html><p><button><listing>
+#text
+
+#data
+<!doctype html><p><button><pre>
+#text
+
+#data
+<!doctype html><p><button><form>
+#text
+
+#data
+<!doctype html><p><button><li>
+#text
+
+#data
+<!doctype html><p><button><dd>
+#text
+
+#data
+<!doctype html><p><button><dt>
+#text
+
+#data
+<!doctype html><p><button><plaintext>
+#text
+
+#data
+<!doctype html><p><button><table>
+#text
+
+#data
+<!doctype html><p><button><hr>
+#text
+
+#data
+<!doctype html><p><button><xmp>
+#text
+
+#data
+<!doctype html><p><button></p>
+#text
+
+#data
+<!doctype html><button><p></button>x
+#text
+x
+#data
+<!doctype html><address><button></address>a
+#text
+a
+#data
+<p><table></p>
+#text
+
+#data
+<!doctype html><svg>
+#text
+
+#data
+<!doctype html><p><figcaption>
+#text
+
+#data
+<!doctype html><p><summary>
+#text
+
+#data
+<!doctype html><form><table><form>
+#text
+
+#data
+<!doctype html><table><form><form>
+#text
+
+#data
+<!doctype html><table><form></table><form>
+#text
+
+#data
+<!doctype html><svg><foreignObject><p>
+#text
+
+#data
+<!doctype html><svg><title>abc
+#text
+
+#data
+<option><span><option>
+#text
+
+#data
+<option><option>
+#text
+
+#data
+<math><annotation-xml><div>
+#text
+
+#data
+<math><annotation-xml encoding="application/svg+xml"><div>
+#text
+
+#data
+<math><annotation-xml encoding="application/xhtml+xml"><div>
+#text
+
+#data
+<math><annotation-xml encoding="aPPlication/xhtmL+xMl"><div>
+#text
+
+#data
+<math><annotation-xml encoding="text/html"><div>
+#text
+
+#data
+<math><annotation-xml encoding="Text/htmL"><div>
+#text
+
+#data
+<math><annotation-xml encoding=" text/html "><div>
+#text
+
+#data
+<math><annotation-xml> </annotation-xml>
+#text
+
+#data
+<math><annotation-xml>c</annotation-xml>
+#text
+
+#data
+<math><annotation-xml><!--foo-->
+#text
+
+#data
+<math><annotation-xml></svg>x
+#text
+
+#data
+<math><annotation-xml><svg>x
+#text
+

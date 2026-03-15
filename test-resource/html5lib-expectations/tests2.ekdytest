@@ -1,0 +1,259 @@
+#data
+<!DOCTYPE html>Test
+#text
+Test
+#data
+<textarea>test</div>test
+#text
+
+#data
+<table><td>
+#text
+
+#data
+<table><td>test</tbody></table>
+#text
+test
+#data
+<frame>test
+#text
+test
+#data
+<!DOCTYPE html><frameset>test
+#text
+
+#data
+<!DOCTYPE html><frameset> te st
+#text
+
+#data
+<!DOCTYPE html><frameset></frameset> te st
+#text
+
+#data
+<!DOCTYPE html><frameset><!DOCTYPE html>
+#text
+
+#data
+<!DOCTYPE html><font><p><b>test</font>
+#text
+test
+#data
+<!DOCTYPE html><dt><div><dd>
+#text
+
+#data
+<script></x
+#text
+
+#data
+<table><plaintext><td>
+#text
+<td>
+#data
+<plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!DOCTYPE html><table><tr>TEST
+#text
+TEST
+#data
+<!DOCTYPE html><body t1=1><body t2=2><body t3=3 t4=4>
+#text
+
+#data
+</b test
+#text
+
+#data
+<!DOCTYPE html></b test<b &=&amp>X
+#text
+X
+#data
+<!doctypehtml><scrIPt type=text/x-foobar;baz>X</SCRipt
+#text
+
+#data
+&
+#text
+&
+#data
+&#
+#text
+&#
+#data
+&#X
+#text
+&#X
+#data
+&#x
+#text
+&#x
+#data
+&#45
+#text
+-
+#data
+&x-test
+#text
+&x-test
+#data
+<!doctypehtml><p><li>
+#text
+
+#data
+<!doctypehtml><p><dt>
+#text
+
+#data
+<!doctypehtml><p><dd>
+#text
+
+#data
+<!doctypehtml><p><form>
+#text
+
+#data
+<!DOCTYPE html><p></P>X
+#text
+X
+#data
+&AMP
+#text
+&
+#data
+&AMp;
+#text
+&AMp;
+#data
+<!DOCTYPE html><html><head></head><body><thisISasillyTESTelementNameToMakeSureCrazyTagNamesArePARSEDcorrectLY>
+#text
+
+#data
+<!DOCTYPE html>X</body>X
+#text
+XX
+#data
+<!DOCTYPE html><!-- X
+#text
+
+#data
+<!DOCTYPE html><table><caption>test TEST</caption><td>test
+#text
+test TEST
+test
+#data
+<!DOCTYPE html><select><option><optgroup>
+#text
+
+#data
+<!DOCTYPE html><select><optgroup><option></optgroup><option><select><option>
+#text
+
+#data
+<!DOCTYPE html><select><optgroup><option><optgroup>
+#text
+
+#data
+<!DOCTYPE html><datalist><option>foo</datalist>bar
+#text
+bar
+#data
+<!DOCTYPE html><font><input><input></font>
+#text
+
+#data
+<!DOCTYPE html><!-- XXX - XXX -->
+#text
+
+#data
+<!DOCTYPE html><!-- XXX - XXX
+#text
+
+#data
+<!DOCTYPE html><!-- XXX - XXX - XXX -->
+#text
+
+#data
+<!DOCTYPE html> <!DOCTYPE html>
+#text
+
+#data
+test
+test
+#text
+test test
+#data
+<!DOCTYPE html><body><title>test</body></title>
+#text
+
+#data
+<!DOCTYPE html><body><title>X</title><meta name=z><link rel=foo><style>
+x { content:"</style" } </style>
+#text
+
+#data
+<!DOCTYPE html><select><optgroup></optgroup></select>
+#text
+
+#data
+
+
+#text
+
+#data
+<!DOCTYPE html>  <html>
+#text
+
+#data
+<!DOCTYPE html><script>
+</script>  <title>x</title>  </head>
+#text
+
+#data
+<!DOCTYPE html><html><body><html id=x>
+#text
+
+#data
+<!DOCTYPE html>X</body><html id="x">
+#text
+X
+#data
+<!DOCTYPE html><head><html id=x>
+#text
+
+#data
+<!DOCTYPE html>X</html>X
+#text
+XX
+#data
+<!DOCTYPE html>X</html>
+#text
+X
+#data
+<!DOCTYPE html>X</html><p>X
+#text
+X
+
+X
+#data
+<!DOCTYPE html>X<p/x/y/z>
+#text
+X
+#data
+<!DOCTYPE html><!--x--
+#text
+
+#data
+<!DOCTYPE html><table><tr><td></p></table>
+#text
+
+#data
+<!DOCTYPE <!DOCTYPE HTML>><!--<!--x-->-->
+#text
+>-->
+#data
+<!doctype html><div><form></form><div></div></div>
+#text
+

@@ -4,17 +4,30 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    { nixpkgs, flake-utils, ... }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-      in {
+      in
+      {
         devShells.default = pkgs.mkShell {
-          packages = [
-            pkgs.zig
-            pkgs.zls
-            pkgs.git
-          ];
+          packages =
+            with pkgs;
+            [
+              zig
+              zls
+              git
+            ]
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              (python3.withPackages (ps: with ps; [
+                websocket-client
+                python-lsp-server
+              ]))
+              chromium
+              parallel
+            ];
         };
       }
     );

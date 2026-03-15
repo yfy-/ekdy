@@ -1,0 +1,12 @@
+#data
+<input type="hidden"><frameset>
+#text
+
+#data
+<!DOCTYPE html><table><caption><svg>foo</table>bar
+#text
+bar
+#data
+<table><tr><td><svg><desc><td></desc><circle>
+#text
+

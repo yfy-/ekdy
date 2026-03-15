@@ -1,0 +1,104 @@
+#data
+<div bar="ZZ&gt;YY"></div>
+#text
+
+#data
+<div bar="ZZ&"></div>
+#text
+
+#data
+<div bar='ZZ&'></div>
+#text
+
+#data
+<div bar=ZZ&></div>
+#text
+
+#data
+<div bar="ZZ&gt=YY"></div>
+#text
+
+#data
+<div bar="ZZ&gt0YY"></div>
+#text
+
+#data
+<div bar="ZZ&gt9YY"></div>
+#text
+
+#data
+<div bar="ZZ&gtaYY"></div>
+#text
+
+#data
+<div bar="ZZ&gtZYY"></div>
+#text
+
+#data
+<div bar="ZZ&gt YY"></div>
+#text
+
+#data
+<div bar="ZZ&gt"></div>
+#text
+
+#data
+<div bar='ZZ&gt'></div>
+#text
+
+#data
+<div bar=ZZ&gt></div>
+#text
+
+#data
+<div bar="ZZ&pound_id=23"></div>
+#text
+
+#data
+<div bar="ZZ&prod_id=23"></div>
+#text
+
+#data
+<div bar="ZZ&pound;_id=23"></div>
+#text
+
+#data
+<div bar="ZZ&prod;_id=23"></div>
+#text
+
+#data
+<div bar="ZZ&pound=23"></div>
+#text
+
+#data
+<div bar="ZZ&prod=23"></div>
+#text
+
+#data
+<div>ZZ&pound_id=23</div>
+#text
+ZZ£_id=23
+#data
+<div>ZZ&prod_id=23</div>
+#text
+ZZ&prod_id=23
+#data
+<div>ZZ&pound;_id=23</div>
+#text
+ZZ£_id=23
+#data
+<div>ZZ&prod;_id=23</div>
+#text
+ZZ∏_id=23
+#data
+<div>ZZ&pound=23</div>
+#text
+ZZ£=23
+#data
+<div>ZZ&prod=23</div>
+#text
+ZZ&prod=23
+#data
+<div>ZZ&AElig=</div>
+#text
+ZZÆ=

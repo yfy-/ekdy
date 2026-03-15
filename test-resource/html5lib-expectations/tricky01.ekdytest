@@ -1,0 +1,82 @@
+#data
+<b><p>Bold </b> Not bold</p>
+Also not bold.
+#text
+Bold Not bold
+
+Also not bold.
+#data
+<html>
+<font color=red><i>Italic and Red<p>Italic and Red </font> Just italic.</p> Italic only.</i> Plain
+<p>I should not be red. <font color=red>Red. <i>Italic and red.</p>
+<p>Italic and red. </i> Red.</font> I should not be red.</p>
+<b>Bold <i>Bold and italic</b> Only Italic </i> Plain
+#text
+Italic and Red
+
+Italic and Red Just italic.
+
+Italic only. Plain
+
+I should not be red. Red. Italic and red.
+
+Italic and red. Red. I should not be red.
+
+Bold Bold and italic Only Italic Plain
+#data
+<html><body>
+<p><font size="7">First paragraph.</p>
+<p>Second paragraph.</p></font>
+<b><p><i>Bold and Italic</b> Italic</p>
+#text
+First paragraph.
+
+Second paragraph.
+
+Bold and Italic Italic
+#data
+<html>
+<dl>
+<dt><b>Boo
+<dd>Goo?
+</dl>
+</html>
+#text
+Boo
+Goo?
+#data
+<html><body>
+<label><a><div>Hello<div>World</div></a></label>
+</body></html>
+#text
+Hello
+World
+#data
+<table><center> <font>a</center> <img> <tr><td> </td> </tr> </table>
+#text
+a
+#data
+<table><tr><p><a><p>You should see this text.
+#text
+You should see this text.
+#data
+<TABLE>
+<TR>
+<CENTER><CENTER><TD></TD></TR><TR>
+<FONT>
+<TABLE><tr></tr></TABLE>
+</P>
+<a></font><font></a>
+This page contains an insanely badly-nested tag sequence.
+#text
+This page contains an insanely badly-nested tag sequence.
+#data
+<html>
+<body>
+<b><nobr><div>This text is in a div inside a nobr</nobr>More text that should not be in the nobr, i.e., the
+nobr should have closed the div inside it implicitly. </b><pre>A pre tag outside everything else.</pre>
+</body>
+</html>
+#text
+This text is in a div inside a nobrMore text that should not be in the nobr, i.e., the nobr should have closed the div inside it implicitly.
+A pre tag outside everything else.

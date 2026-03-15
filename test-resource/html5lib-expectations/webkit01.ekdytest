@@ -1,0 +1,227 @@
+#data
+Test
+#text
+Test
+#data
+<div></div>
+#text
+
+#data
+<div>Test</div>
+#text
+Test
+#data
+<di
+#text
+
+#data
+<div>Hello</div>
+<script>
+console.log("PASS");
+</script>
+<div>Bye</div>
+#text
+Hello
+Bye
+#data
+<div foo="bar">Hello</div>
+#text
+Hello
+#data
+<div>Hello</div>
+<script>
+console.log("FOO<span>BAR</span>BAZ");
+</script>
+<div>Bye</div>
+#text
+Hello
+Bye
+#data
+<foo bar="baz"></foo><potato quack="duck"></potato>
+#text
+
+#data
+<foo bar="baz"><potato quack="duck"></potato></foo>
+#text
+
+#data
+<foo></foo bar="baz"><potato></potato quack="duck">
+#text
+
+#data
+</ tttt>
+#text
+
+#data
+<div FOO ><img><img></div>
+#text
+
+#data
+<p>Test</p<p>Test2</p>
+#text
+TestTest2
+#data
+<rdar://problem/6869687>
+#text
+
+#data
+<A>test< /A>
+#text
+test< /A>
+#data
+&lt;
+#text
+<
+#data
+<body foo='bar'><body foo='baz' yo='mama'>
+#text
+
+#data
+<body></br foo="bar"></body>
+#text
+
+#data
+<bdy><br foo="bar"></body>
+#text
+
+#data
+<body></body></br foo="bar">
+#text
+
+#data
+<bdy></body><br foo="bar">
+#text
+
+#data
+<html><body></body></html><!-- Hi there -->
+#text
+
+#data
+<html><body></body></html><!-- Comment A --><!-- Comment B --><!-- Comment C --><!-- Comment D --><!-- Comment E -->
+#text
+
+#data
+<html><body></body></html>x<!-- Hi there -->
+#text
+x
+#data
+<html><body></body></html>x<!-- Hi there --></html><!-- Again -->
+#text
+x
+#data
+<html><body></body></html>x<!-- Hi there --></body></html><!-- Again -->
+#text
+x
+#data
+<html><body></body>
+   <!-- Hi there --></html>
+#text
+
+#data
+<html><body></body></html>
+   <!-- Hi there -->
+#text
+
+#data
+<html><body><ruby><div><rp>xx</rp></div></ruby></body></html>
+#text
+
+#data
+<html><body><ruby><div><rt>xx</rt></div></ruby></body></html>
+#text
+xx
+#data
+<html><frameset><!--1--><noframes>A</noframes><!--2--></frameset><!--3--><noframes>B</noframes><!--4--></html><!--5--><noframes>C</noframes><!--6-->
+#text
+
+#data
+<select><option>A<select><option>B<select><option>C<select><option>D<select><option>E<select><option>F<select><option>G<select>
+#text
+A
+BC
+DE
+FG
+#data
+<dd><dd><dt><dt><dd><li><li>
+#text
+
+#data
+<div><b></div><div><nobr>a<nobr>
+#text
+a
+#data
+<head></head>
+<body></body>
+#text
+
+#data
+<head></head> <style></style>ddd
+#text
+ddd
+#data
+<kbd><table></kbd><col><select><tr>
+#text
+
+#data
+<kbd><table></kbd><col><select><tr></table><div>
+#text
+
+#data
+<a><li><style></style><title></title></a>
+#text
+
+#data
+<font></p><p><meta><title></title></font>
+#text
+
+#data
+<a><center><title></title><a>
+#text
+
+#data
+<svg><title><div>
+#text
+
+#data
+<svg><title><rect><div>
+#text
+
+#data
+<svg><title><svg><div>
+#text
+
+#data
+<img <="" FAIL>
+#text
+
+#data
+<ul><li><div id='foo'/>A</li><li>B<div>C</div></li></ul>
+#text
+A
+B
+C
+#data
+<svg><em><desc></em>
+#text
+
+#data
+<table><tr><td><svg><desc><td></desc><circle>
+#text
+
+#data
+<svg><tfoot></mi><td>
+#text
+
+#data
+<math><mrow><mrow><mn>1</mn></mrow><mi>a</mi></mrow></math>
+#text
+1
+𝑎
+#data
+<!doctype html><input type="hidden"><frameset>
+#text
+
+#data
+<!doctype html><input type="button"><frameset>
+#text
+

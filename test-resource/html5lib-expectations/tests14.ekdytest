@@ -1,0 +1,28 @@
+#data
+<!DOCTYPE html><html><body><xyz:abc></xyz:abc>
+#text
+
+#data
+<!DOCTYPE html><html><body><xyz:abc></xyz:abc><span></span>
+#text
+
+#data
+<!DOCTYPE html><html><html abc:def=gh><xyz:abc></xyz:abc>
+#text
+
+#data
+<!DOCTYPE html><html xml:lang=bar><html xml:lang=foo>
+#text
+
+#data
+<!DOCTYPE html><html 123=456>
+#text
+
+#data
+<!DOCTYPE html><html 123=456><html 789=012>
+#text
+
+#data
+<!DOCTYPE html><html><body 789=012>
+#text
+

@@ -1,0 +1,424 @@
+#data
+<!doctype html><math><mn DefinitionUrl="foo">
+#text
+
+#data
+<!doctype html><html></p><!--foo-->
+#text
+
+#data
+<!doctype html><head></head></p><!--foo-->
+#text
+
+#data
+<!doctype html><body><p><pre>
+#text
+
+#data
+<!doctype html><body><p><listing>
+#text
+
+#data
+<!doctype html><p><plaintext>
+#text
+
+#data
+<!doctype html><p><h1>
+#text
+
+#data
+<!doctype html><isindex type="hidden">
+#text
+
+#data
+<!doctype html><ruby><p><rp>
+#text
+
+#data
+<!doctype html><ruby><div><span><rp>
+#text
+
+#data
+<!doctype html><ruby><div><p><rp>
+#text
+
+#data
+<!doctype html><ruby><p><rt>
+#text
+
+#data
+<!doctype html><ruby><div><span><rt>
+#text
+
+#data
+<!doctype html><ruby><div><p><rt>
+#text
+
+#data
+<html><ruby>a<rb>b<rt></ruby></html>
+#text
+ab
+#data
+<html><ruby>a<rp>b<rt></ruby></html>
+#text
+a
+#data
+<html><ruby>a<rt>b<rt></ruby></html>
+#text
+ab
+#data
+<html><ruby>a<rtc>b<rt>c<rb>d</ruby></html>
+#text
+abcd
+#data
+<!doctype html><math/><foo>
+#text
+
+#data
+<!doctype html><svg/><foo>
+#text
+
+#data
+<!doctype html><div></body><!--foo-->
+#text
+
+#data
+<!doctype html><h1><div><h3><span></h1>foo
+#text
+foo
+#data
+<!doctype html><p></h3>foo
+#text
+foo
+#data
+<!doctype html><h3><li>abc</h2>foo
+#text
+abc
+foo
+#data
+<!doctype html><table>abc<!--foo-->
+#text
+abc
+#data
+<!doctype html><table>  <!--foo-->
+#text
+
+#data
+<!doctype html><table> b <!--foo-->
+#text
+b
+#data
+<!doctype html><select><option><option>
+#text
+
+#data
+<!doctype html><select><option></optgroup>
+#text
+
+#data
+<!doctype html><dd><optgroup><dd>
+#text
+
+#data
+<!doctype html><p><math><mi><p><h1>
+#text
+
+#data
+<!doctype html><p><math><mo><p><h1>
+#text
+
+#data
+<!doctype html><p><math><mn><p><h1>
+#text
+
+#data
+<!doctype html><p><math><ms><p><h1>
+#text
+
+#data
+<!doctype html><p><math><mtext><p><h1>
+#text
+
+#data
+<!doctype html><frameset></noframes>
+#text
+
+#data
+<!doctype html><html c=d><body></html><html a=b>
+#text
+
+#data
+<!doctype html><html c=d><frameset></frameset></html><html a=b>
+#text
+
+#data
+<!doctype html><html><frameset></frameset></html><!--foo-->
+#text
+
+#data
+<!doctype html><html><frameset></frameset></html>
+#text
+
+#data
+<!doctype html><html><frameset></frameset></html>abc
+#text
+
+#data
+<!doctype html><html><frameset></frameset></html><p>
+#text
+
+#data
+<!doctype html><html><frameset></frameset></html></p>
+#text
+
+#data
+<html><frameset></frameset></html><!doctype html>
+#text
+
+#data
+<!doctype html><body><frameset>
+#text
+
+#data
+<!doctype html><p><frameset><frame>
+#text
+
+#data
+<!doctype html><p>a<frameset>
+#text
+a
+#data
+<!doctype html><p> <frameset><frame>
+#text
+
+#data
+<!doctype html><pre><frameset>
+#text
+
+#data
+<!doctype html><listing><frameset>
+#text
+
+#data
+<!doctype html><li><frameset>
+#text
+
+#data
+<!doctype html><dd><frameset>
+#text
+
+#data
+<!doctype html><dt><frameset>
+#text
+
+#data
+<!doctype html><button><frameset>
+#text
+
+#data
+<!doctype html><applet><frameset>
+#text
+
+#data
+<!doctype html><marquee><frameset>
+#text
+
+#data
+<!doctype html><object><frameset>
+#text
+
+#data
+<!doctype html><table><frameset>
+#text
+
+#data
+<!doctype html><area><frameset>
+#text
+
+#data
+<!doctype html><basefont><frameset>
+#text
+
+#data
+<!doctype html><bgsound><frameset>
+#text
+
+#data
+<!doctype html><br><frameset>
+#text
+
+#data
+<!doctype html><embed><frameset>
+#text
+
+#data
+<!doctype html><img><frameset>
+#text
+
+#data
+<!doctype html><input><frameset>
+#text
+
+#data
+<!doctype html><keygen><frameset>
+#text
+
+#data
+<!doctype html><wbr><frameset>
+#text
+
+#data
+<!doctype html><hr><frameset>
+#text
+
+#data
+<!doctype html><textarea></textarea><frameset>
+#text
+
+#data
+<!doctype html><xmp></xmp><frameset>
+#text
+
+#data
+<!doctype html><iframe></iframe><frameset>
+#text
+
+#data
+<!doctype html><select></select><frameset>
+#text
+
+#data
+<!doctype html><svg></svg><frameset><frame>
+#text
+
+#data
+<!doctype html><math></math><frameset><frame>
+#text
+
+#data
+<!doctype html><svg><foreignObject><div> <frameset><frame>
+#text
+
+#data
+<!doctype html><svg>a</svg><frameset><frame>
+#text
+
+#data
+<!doctype html><svg> </svg><frameset><frame>
+#text
+
+#data
+<html>aaa<frameset></frameset>
+#text
+aaa
+#data
+<html> a <frameset></frameset>
+#text
+a
+#data
+<!doctype html><div><frameset>
+#text
+
+#data
+<!doctype html><div><body><frameset>
+#text
+
+#data
+<!doctype html><p><math></p>a
+#text
+a
+#data
+<!doctype html><p><math><mn><span></p>a
+#text
+a
+#data
+<!doctype html><math></html>
+#text
+
+#data
+<!doctype html><meta charset="ascii">
+#text
+
+#data
+<!doctype html><meta http-equiv="content-type" content="text/html;charset=ascii">
+#text
+
+#data
+<!doctype html><head><!--aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa--><meta charset="utf8">
+#text
+
+#data
+<!doctype html><html a=b><head></head><html c=d>
+#text
+
+#data
+<!doctype html><image/>
+#text
+
+#data
+<!doctype html>a<i>b<table>c<b>d</i>e</b>f
+#text
+abcdef
+#data
+<!doctype html><table><i>a<b>b<div>c<a>d</i>e</b>f
+#text
+ab
+cdef
+#data
+<!doctype html><i>a<b>b<div>c<a>d</i>e</b>f
+#text
+ab
+cdef
+#data
+<!doctype html><table><i>a<b>b<div>c</i>
+#text
+ab
+c
+#data
+<!doctype html><table><i>a<div>b<tr>c<b>d</i>e
+#text
+a
+b
+cde
+#data
+<!doctype html><table><td><table><i>a<div>b<b>c</i>d
+#text
+a
+bcd
+#data
+<!doctype html><body><bgsound>
+#text
+
+#data
+<!doctype html><body><basefont>
+#text
+
+#data
+<!doctype html><a><b></a><basefont>
+#text
+
+#data
+<!doctype html><a><b></a><bgsound>
+#text
+
+#data
+<!doctype html><figcaption><article></figcaption>a
+#text
+a
+#data
+<!doctype html><summary><article></summary>a
+#text
+a
+#data
+<!doctype html><p><a><plaintext>b
+#text
+b
+#data
+<!DOCTYPE html><div>a<a></div>b<p>c</p>d
+#text
+a
+b
+
+c
+
+d

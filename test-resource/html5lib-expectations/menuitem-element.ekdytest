@@ -1,0 +1,82 @@
+#data
+<menuitem>
+#text
+
+#data
+</menuitem>
+#text
+
+#data
+<!DOCTYPE html><body><menuitem>A
+#text
+A
+#data
+<!DOCTYPE html><body><menuitem>A<menuitem>B
+#text
+AB
+#data
+<!DOCTYPE html><body><menuitem>A<menu>B</menu>
+#text
+A
+B
+#data
+<!DOCTYPE html><body><menuitem>A<hr>B
+#text
+A
+B
+#data
+<!DOCTYPE html><li><menuitem><li>
+#text
+
+#data
+<!DOCTYPE html><menuitem><p></menuitem>x
+#text
+x
+#data
+<!DOCTYPE html><p><b></p><menuitem>
+#text
+
+#data
+<!DOCTYPE html><menuitem><asdf></menuitem>x
+#text
+x
+#data
+<!DOCTYPE html></menuitem>
+#text
+
+#data
+<!DOCTYPE html><html></menuitem>
+#text
+
+#data
+<!DOCTYPE html><head></menuitem>
+#text
+
+#data
+<!DOCTYPE html><select><menuitem></select>
+#text
+
+#data
+<!DOCTYPE html><option><menuitem>
+#text
+
+#data
+<!DOCTYPE html><menuitem><option>
+#text
+
+#data
+<!DOCTYPE html><menuitem></body>
+#text
+
+#data
+<!DOCTYPE html><menuitem></html>
+#text
+
+#data
+<!DOCTYPE html><menuitem><p>
+#text
+
+#data
+<!DOCTYPE html><menuitem><li>
+#text
+

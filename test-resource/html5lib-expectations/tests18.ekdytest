@@ -1,0 +1,144 @@
+#data
+<plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><html><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><head><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><html><noscript><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html></head><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><body><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><table><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><table><tbody><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><table><tbody><tr><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><table><td><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><table><caption><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><table><colgroup><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><select><plaintext></plaintext>X
+#text
+
+#data
+<!doctype html><table><select><plaintext>a<caption>b
+#text
+
+#data
+<!doctype html><template><plaintext>a</template>b
+#text
+
+#data
+<!doctype html><body></body><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><frameset><plaintext></plaintext>
+#text
+
+#data
+<!doctype html><frameset></frameset><plaintext></plaintext>
+#text
+
+#data
+<!doctype html><body></body></html><plaintext></plaintext>
+#text
+</plaintext>
+#data
+<!doctype html><frameset></frameset></html><plaintext></plaintext>
+#text
+
+#data
+<!doctype html><svg><plaintext>a</plaintext>b
+#text
+
+#data
+<!doctype html><svg><title><plaintext>a</plaintext>b
+#text
+
+#data
+<!doctype html><table><tr><style></script></style>abc
+#text
+abc
+#data
+<!doctype html><table><tr><script></style></script>abc
+#text
+abc
+#data
+<!doctype html><table><caption><style></script></style>abc
+#text
+abc
+#data
+<!doctype html><table><td><style></script></style>abc
+#text
+abc
+#data
+<!doctype html><select><script></style></script>abc
+#text
+
+#data
+<!doctype html><table><select><script></style></script>abc
+#text
+
+#data
+<!doctype html><table><tr><select><script></style></script>abc
+#text
+
+#data
+<!doctype html><frameset></frameset><noframes>abc
+#text
+
+#data
+<!doctype html><frameset></frameset><noframes>abc</noframes><!--abc-->
+#text
+
+#data
+<!doctype html><frameset></frameset></html><noframes>abc
+#text
+
+#data
+<!doctype html><frameset></frameset></html><noframes>abc</noframes><!--abc-->
+#text
+
+#data
+<!doctype html><table><tr></tbody><tfoot>
+#text
+
+#data
+<!doctype html><table><td><svg></svg>abc<td>
+#text
+abc

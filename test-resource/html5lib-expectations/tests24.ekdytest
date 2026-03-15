@@ -1,0 +1,32 @@
+#data
+<!DOCTYPE html>&NotEqualTilde;
+#text
+≂̸
+#data
+<!DOCTYPE html>&NotEqualTilde;A
+#text
+≂̸A
+#data
+<!DOCTYPE html>&ThickSpace;
+#text
+
+#data
+<!DOCTYPE html>&ThickSpace;A
+#text
+A
+#data
+<!DOCTYPE html>&NotSubset;
+#text
+⊂⃒
+#data
+<!DOCTYPE html>&NotSubset;A
+#text
+⊂⃒A
+#data
+<!DOCTYPE html>&Gopf;
+#text
+𝔾
+#data
+<!DOCTYPE html>&Gopf;A
+#text
+𝔾A

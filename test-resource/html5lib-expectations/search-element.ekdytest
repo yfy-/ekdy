@@ -1,0 +1,18 @@
+#data
+<!doctype html><p>foo<search>bar<p>baz
+#text
+foo
+
+bar
+
+baz
+#data
+<!doctype html><search><p>foo</search>bar
+#text
+foo
+
+bar
+#data
+<!DOCTYPE html>xxx<svg><x><g><a><search><b>
+#text
+xxx

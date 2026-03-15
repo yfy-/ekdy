@@ -1,0 +1,86 @@
+#data
+<!DOCTYPE html><body><a href='#1'><nobr>1<nobr></a><br><a href='#2'><nobr>2<nobr></a><br><a href='#3'><nobr>3<nobr></a>
+#text
+1
+2
+3
+#data
+<!DOCTYPE html><body><b><nobr>1<nobr></b><i><nobr>2<nobr></i>3
+#text
+123
+#data
+<!DOCTYPE html><body><b><nobr>1<table><nobr></b><i><nobr>2<nobr></i>3
+#text
+123
+#data
+<!DOCTYPE html><body><b><nobr>1<table><tr><td><nobr></b><i><nobr>2<nobr></i>3
+#text
+1
+23
+#data
+<!DOCTYPE html><body><b><nobr>1<div><nobr></b><i><nobr>2<nobr></i>3
+#text
+1
+23
+#data
+<!DOCTYPE html><body><b><nobr>1<nobr></b><div><i><nobr>2<nobr></i>3
+#text
+1
+23
+#data
+<!DOCTYPE html><body><b><nobr>1<nobr><ins></b><i><nobr>
+#text
+1
+#data
+<!DOCTYPE html><body><b><nobr>1<ins><nobr></b><i>2
+#text
+12
+#data
+<!DOCTYPE html><body><b>1<nobr></b><i><nobr>2</i>
+#text
+12
+#data
+<p><code x</code></p>
+
+#text
+
+#data
+<!DOCTYPE html><svg><foreignObject><p><i></p>a
+#text
+a
+#data
+<!DOCTYPE html><table><tr><td><svg><foreignObject><p><i></p>a
+#text
+a
+#data
+<!DOCTYPE html><math><mtext><p><i></p>a
+#text
+a
+#data
+<!DOCTYPE html><table><tr><td><math><mtext><p><i></p>a
+#text
+a
+#data
+<!DOCTYPE html><body><div><!/div>a
+#text
+a
+#data
+<button><p><button>
+#text
+
+#data
+<svg></p><foo>
+#text
+
+#data
+<svg></br><foo>
+#text
+
+#data
+<math></p><foo>
+#text
+
+#data
+<math></br><foo>
+#text
+

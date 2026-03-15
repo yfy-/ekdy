@@ -1,0 +1,68 @@
+#data
+<style> <!-- </style>x
+#text
+x
+#data
+<style> <!-- </style> --> </style>x
+#text
+--> x
+#data
+<style> <!--> </style>x
+#text
+x
+#data
+<style> <!---> </style>x
+#text
+x
+#data
+<iframe> <!---> </iframe>x
+#text
+x
+#data
+<iframe> <!--- </iframe>->x</iframe> --> </iframe>x
+#text
+->x --> x
+#data
+<script> <!-- </script> --> </script>x
+#text
+--> x
+#data
+<title> <!-- </title> --> </title>x
+#text
+--> x
+#data
+<textarea> <!--- </textarea>->x</textarea> --> </textarea>x
+#text
+->x --> x
+#data
+<style> <!</-- </style>x
+#text
+x
+#data
+<p><xmp></xmp>
+#text
+
+#data
+<xmp> <!-- > --> </xmp>
+#text
+<!-- > -->
+#data
+<title>&amp;</title>
+#text
+
+#data
+<title><!--&amp;--></title>
+#text
+
+#data
+<title><!--</title>
+#text
+
+#data
+<noscript><!--</noscript>--></noscript>
+#text
+
+#data
+<noscript><!--</noscript>--></noscript>
+#text
+

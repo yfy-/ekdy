@@ -1,0 +1,65 @@
+#data
+FOO<!-- BAR -->BAZ
+#text
+FOOBAZ
+#data
+FOO<!-- BAR --!>BAZ
+#text
+FOOBAZ
+#data
+FOO<!-- BAR --! >BAZ
+#text
+FOO
+#data
+FOO<!-- BAR --!
+>BAZ
+#text
+FOO
+#data
+FOO<!-- BAR --   >BAZ
+#text
+FOO
+#data
+FOO<!-- BAR -- <QUX> -- MUX -->BAZ
+#text
+FOOBAZ
+#data
+FOO<!-- BAR -- <QUX> -- MUX --!>BAZ
+#text
+FOOBAZ
+#data
+FOO<!-- BAR -- <QUX> -- MUX -- >BAZ
+#text
+FOO
+#data
+FOO<!---->BAZ
+#text
+FOOBAZ
+#data
+FOO<!--->BAZ
+#text
+FOOBAZ
+#data
+FOO<!-->BAZ
+#text
+FOOBAZ
+#data
+<?xml version="1.0">Hi
+#text
+Hi
+#data
+<?xml version="1.0">
+#text
+
+#data
+<?xml version
+#text
+
+#data
+FOO<!----->BAZ
+#text
+FOOBAZ
+#data
+<html><!-- comment --><title>Comment before head</title>
+#text
+

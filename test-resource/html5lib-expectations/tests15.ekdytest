@@ -1,0 +1,58 @@
+#data
+<!DOCTYPE html><p><b><i><u></p> <p>X
+#text
+X
+#data
+<p><b><i><u></p>
+<p>X
+#text
+X
+#data
+<!doctype html></html> <head>
+#text
+
+#data
+<!doctype html></body><meta>
+#text
+
+#data
+<html></html><!-- foo -->
+#text
+
+#data
+<!doctype html></body><title>X</title>
+#text
+
+#data
+<!doctype html><table> X<meta></table>
+#text
+X
+#data
+<!doctype html><table> x</table>
+#text
+x
+#data
+<!doctype html><table> x </table>
+#text
+x
+#data
+<!doctype html><table><tr> x</table>
+#text
+x
+#data
+<!doctype html><table>X<style> <tr>x </style> </table>
+#text
+X
+#data
+<!doctype html><div><table><a>foo</a> <tr><td>bar</td> </tr></table></div>
+#text
+foo
+bar
+#data
+<frame></frame></frame><frameset><frame><frameset><frame></frameset><noframes></frameset><noframes>
+#text
+
+#data
+<!DOCTYPE html><object></html>
+#text
+

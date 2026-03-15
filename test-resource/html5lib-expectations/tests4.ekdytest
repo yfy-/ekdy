@@ -1,0 +1,36 @@
+#data
+direct div content
+#text
+direct div content
+#data
+direct textarea content
+#text
+direct textarea content
+#data
+textarea content with <em>pseudo</em> <foo>markup
+#text
+textarea content with pseudo markup
+#data
+this is &#x0043;DATA inside a <style> element
+#text
+this is CDATA inside a
+#data
+</plaintext>
+#text
+
+#data
+setting html's innerHTML
+#text
+setting html's innerHTML
+#data
+<title>setting head's innerHTML</title>
+#text
+
+#data
+direct <title> content
+#text
+direct
+#data
+<!-- inside </script> -->
+#text
+
