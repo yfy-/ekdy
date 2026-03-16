@@ -1,5 +1,6 @@
 const std = @import("std");
 const ekdy = @import("ekdy");
+const InnerText = ekdy.policy.InnerText;
 
 pub fn main() !void {
     const buf_size = 32 * 1024;
@@ -20,7 +21,8 @@ pub fn main() !void {
     const stdin = &stdin_reader.interface;
     const stdout = &stdout_writer.interface;
 
-    var extractor = try ekdy.html.TextExtractor.init(allocator, stdout);
+    var policy = InnerText{};
+    var extractor = try ekdy.html.TextExtractor(InnerText).init(allocator, stdout, &policy);
     defer extractor.deinit(allocator);
 
     while (stdin.fillMore()) {
