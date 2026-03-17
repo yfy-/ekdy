@@ -199,7 +199,7 @@ pub const Whitespace = enum(u2) {
     double_break,
 };
 
-pub const TagProperty = struct {
+pub const TagProperty = packed struct {
     is_void: bool = false,
     is_ignore: bool = false,
     is_rcdata: bool = false,
@@ -207,7 +207,7 @@ pub const TagProperty = struct {
     is_preformatted: bool = false,
 };
 
-pub const tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.{}, .{
+pub const default_tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.{}, .{
     .area = .{ .is_void = true },
     .base = .{ .is_void = true },
     .br = .{ .is_void = true },
@@ -268,6 +268,7 @@ pub fn is_valid_fs_tag_char(c: u8) bool {
 pub fn TextExtractor(T: type) type {
     return struct {
         const Self = @This();
+        const tag_properties = initTagProps();
 
         /// Whitespace type to emit.
         pending_whitespace: ?Whitespace = null,
@@ -323,7 +324,22 @@ pub fn TextExtractor(T: type) type {
             script,
             script_escaped,
             script_double_escaped,
+	    frameset,
         };
+
+        // Initialize tag properties by respecting the overrides
+        // provided by the policy type.
+        fn initTagProps() std.EnumArray(Tag, TagProperty) {
+            var props = default_tag_properties;
+            if (!@hasDecl(T, "tag_property_overrides"))
+                return props;
+
+            for (&T.tag_property_overrides) |tp| {
+                props.set(tp.@"0", tp.@"1");
+            }
+
+            return props;
+        }
 
         pub fn init(allocator: Allocator, out_writer: *Writer, policy: *T) !Self {
             return Self{
@@ -363,6 +379,7 @@ pub fn TextExtractor(T: type) type {
                     .script => self.handleScript(curr_html),
                     .script_escaped => self.handleScriptEscaped(curr_html),
                     .script_double_escaped => self.handleScriptDoubleEscaped(curr_html),
+		    .frameset => self.handleFrameSet(curr_html),
                 };
             }
             self.cursor -= html.len;
@@ -504,7 +521,20 @@ pub fn TextExtractor(T: type) type {
             }
 
             if (ascii.isWhitespace(c) or c == '>' or c == '/') {
-                const tag = tag_from_str(self.tag_buffer.items);
+                var tag = tag_from_str(self.tag_buffer.items);
+
+		// frameset is special. Its only a valid tag if no
+		// text has been written before which in that case no
+		// text can be emitted afterwards. Otherwise, we map
+		// it to unknown to process it inline.
+		if (tag == .frameset) {
+		    if (!self.any_text) {
+			self.state = .frameset;
+			return html.len;
+		    }
+		    tag = .unknown;
+		}
+
                 try self.stack.append(allocator, tag);
                 if (tag_properties.get(tag).is_ignore)
                     self.ignore_depth += 1;
@@ -809,6 +839,11 @@ pub fn TextExtractor(T: type) type {
 
             return 1;
         }
+
+	fn handleFrameSet(self: *Self, html: []const u8) Error!usize {
+	    _ = self;
+	    return html.len;
+	}
     };
 }
 
@@ -994,6 +1029,38 @@ test "integration_vertex_cover" {
     try expectConvertFile("vertex_cover");
 }
 
+fn expectHTML5CheckHelper(
+    html_da: *ArrayList(u8),
+    text_da: *ArrayList(u8),
+    overwrite_index: *u64,
+    overwrite_exps: []const struct { u64, []const u8 },
+    test_id: u64,
+) !void {
+    _ = text_da.pop();
+    _ = html_da.pop();
+
+    var exp: []const u8 = text_da.items;
+    // Override expectation for the test ID.
+    if (overwrite_index.* < overwrite_exps.len and
+        test_id == overwrite_exps[overwrite_index.*].@"0")
+    {
+        exp = overwrite_exps[overwrite_index.*].@"1";
+        overwrite_index.* += 1;
+    }
+
+    expectConvert(exp, html_da.items) catch |terr| {
+        std.debug.print("failed test_id={} on '{s}'\n", .{
+            test_id,
+            html_da.items,
+        });
+        return terr;
+    };
+}
+
+/// Expect all tests in the html5lib ekdytest files pass with the
+/// optional provided overwritten expectations. Overwritten
+/// expectations is used when 'ekdy' decided to not comply with the
+/// HTML5 or the inner policy provided to TextExtractor.
 fn expectHTML5(
     comptime ekdytest_filename: []const u8,
     overwrite_exps: []const struct { u64, []const u8 },
@@ -1019,9 +1086,10 @@ fn expectHTML5(
         html_da.deinit(talloc);
         text_da.deinit(talloc);
     }
+
     var in_data = false;
     var test_id: u64 = 0;
-    var skip_i: u64 = 0;
+    var overwrite_i: u64 = 0;
     while (reader.takeDelimiterInclusive('\n')) |line| {
         if (std.mem.eql(u8, line, "#data\n")) {
             in_data = true;
@@ -1030,23 +1098,13 @@ fn expectHTML5(
                 defer html_da.clearRetainingCapacity();
                 defer test_id += 1;
 
-                _ = text_da.pop();
-                _ = html_da.pop();
-
-                var exp: []const u8 = text_da.items;
-                // Override expectation for the test ID.
-                if (skip_i < overwrite_exps.len and test_id == overwrite_exps[skip_i].@"0") {
-                    exp = overwrite_exps[skip_i].@"1";
-                    skip_i += 1;
-                }
-
-                expectConvert(exp, html_da.items) catch |terr| {
-                    std.debug.print("failed test_id={} on '{s}'\n", .{
-                        test_id,
-                        html_da.items,
-                    });
-                    return terr;
-                };
+                try expectHTML5CheckHelper(
+                    &html_da,
+                    &text_da,
+                    &overwrite_i,
+                    overwrite_exps,
+                    test_id,
+                );
             }
         } else if (std.mem.eql(u8, line, "#text\n")) {
             in_data = false;
@@ -1056,13 +1114,8 @@ fn expectHTML5(
             try text_da.appendSlice(talloc, line);
         }
     } else |err| {
-        if (err != error.StreamTooLong) return err;
-        _ = text_da.pop();
-        _ = html_da.pop();
-        expectConvert(text_da.items, html_da.items) catch |terr| {
-            std.debug.print("failed on {s}\n", .{html_da.items});
-            return terr;
-        };
+        if (err != error.EndOfStream) return err;
+        try expectHTML5CheckHelper(&html_da, &text_da, &overwrite_i, overwrite_exps, test_id);
     }
 }
 
@@ -1076,4 +1129,8 @@ test "html5lib_tests1" {
             .{ 79, "aba\nbrx\naoe" },
         },
     );
+}
+
+test "html5lib_tests2" {
+    try expectHTML5("tests2.ekdytest", &.{});
 }

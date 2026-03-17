@@ -71,14 +71,8 @@ pub const EntityDecoder = struct {
             .hex_begin => {
                 _ = try self.out_writer.print("&#{c}", .{self.hex_char.?});
             },
-            .entity_decimal => {
-                try self.out_writer.print("&#{d}", .{self.numeric_entity});
-            },
-            .entity_hex => {
-                try self.out_writer.print("&#{c}{x}", .{
-                    self.hex_char.?,
-                    self.numeric_entity,
-                });
+            .entity_decimal, .entity_hex => {
+                try self.out_writer.print("{u}", .{self.numeric_codepoint()});
             },
             .entity_named => {
                 try self.out_writer.print("&{s}", .{
