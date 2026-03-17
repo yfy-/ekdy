@@ -56,6 +56,8 @@ const tag_start_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .search = .double_break,
     .section = .double_break,
     .ul = .single_break,
+    .tr = .single_break,
+    .td = .single_break,
 });
 
 const tag_end_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
