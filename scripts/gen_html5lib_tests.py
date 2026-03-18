@@ -135,7 +135,7 @@ def main():
                 print("#data")
                 print(html_code)
                 print("#text")
-                print(text_resp["result"]["value"].strip())
+                print(text_resp["result"]["value"])
             ws.close()
 
     finally:

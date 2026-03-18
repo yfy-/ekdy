@@ -75,9 +75,7 @@ pub const EntityDecoder = struct {
                 try self.out_writer.print("{u}", .{self.numeric_codepoint()});
             },
             .entity_named => {
-                try self.out_writer.print("&{s}", .{
-                    self.named_entity[0..self.named_entity_len],
-                });
+		_ = try self.write_named_longest_match();
             },
             .text => {},
         }
@@ -102,6 +100,32 @@ pub const EntityDecoder = struct {
         }
 
         return self.numeric_entity;
+    }
+
+    fn write_named_longest_match(self: *Self) !bool {
+        var i = self.named_entity_len;
+        while (i > 1) : (i -= 1) {
+            const ent_name = self.named_entity[0..i];
+            if (EncodingEntityMap.get(ent_name)) |*codepoints| {
+                try self.out_writer.print("{u}", .{codepoints.*[0]});
+                if (codepoints.*[1] != 0) {
+                    try self.out_writer.print("{u}", .{codepoints.*[1]});
+                }
+
+                // Dump whatever unmatched.
+                try self.out_writer.writeAll(
+                    self.named_entity[i..self.named_entity_len],
+                );
+
+		return true;
+            }
+        } else {
+            try self.out_writer.print(
+                "&{s}",
+                .{ self.named_entity[0..self.named_entity_len] },
+            );
+	    return false;
+        }
     }
 
     /// Write a chunk decoding.
@@ -218,31 +242,10 @@ pub const EntityDecoder = struct {
 
                         self.transition_to_text();
                     } else if (!std.ascii.isAlphanumeric(c)) {
-                        var i = self.named_entity_len;
-                        while (i > 1) : (i -= 1) {
-                            const ent_name = self.named_entity[0..i];
-                            if (EncodingEntityMap.get(ent_name)) |*codepoints| {
-                                try self.out_writer.print("{u}", .{codepoints.*[0]});
-                                if (codepoints.*[1] != 0) {
-                                    try self.out_writer.print("{u}", .{codepoints.*[1]});
-                                }
+			const match = try self.write_named_longest_match();
 
-                                // Dump whatever unmatched.
-                                try self.out_writer.writeAll(
-                                    self.named_entity[i..self.named_entity_len],
-                                );
-
-                                // Dump the char if not a legal end i.e. ';'.
-                                if (c != ';') try self.out_writer.writeByte(c);
-                                break;
-                            }
-                        } else {
-                            try self.out_writer.print(
-                                "&{s}{c}",
-                                .{ self.named_entity[0..self.named_entity_len], c },
-                            );
-                        }
-
+			// Dump the char if not named entity ends invalid.
+			if (!match or c != ';') try self.out_writer.writeByte(c);
                         self.transition_to_text();
                     } else {
                         self.named_entity[self.named_entity_len] = c;

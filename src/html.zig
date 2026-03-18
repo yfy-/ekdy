@@ -226,6 +226,7 @@ pub const default_tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.
     .wbr = .{ .is_void = true },
     .audio = .{ .is_ignore = true },
     .canvas = .{ .is_ignore = true },
+    .datalist = .{ .is_ignore = true },
     .fencedframe = .{ .is_ignore = true },
     .frameset = .{ .is_ignore = true },
     .iframe = .{ .is_ignore = true, .is_rawtext = true },
@@ -324,7 +325,7 @@ pub fn TextExtractor(T: type) type {
             script,
             script_escaped,
             script_double_escaped,
-	    frameset,
+            frameset,
         };
 
         // Initialize tag properties by respecting the overrides
@@ -379,7 +380,7 @@ pub fn TextExtractor(T: type) type {
                     .script => self.handleScript(curr_html),
                     .script_escaped => self.handleScriptEscaped(curr_html),
                     .script_double_escaped => self.handleScriptDoubleEscaped(curr_html),
-		    .frameset => self.handleFrameSet(curr_html),
+                    .frameset => self.handleFrameSet(curr_html),
                 };
             }
             self.cursor -= html.len;
@@ -464,7 +465,6 @@ pub fn TextExtractor(T: type) type {
                 return 1;
             }
 
-            // rawtext tags do not decode entities.
             const w = self.writer(tag_prop);
 
             if (self.pending_whitespace) |pw| {
@@ -523,17 +523,17 @@ pub fn TextExtractor(T: type) type {
             if (ascii.isWhitespace(c) or c == '>' or c == '/') {
                 var tag = tag_from_str(self.tag_buffer.items);
 
-		// frameset is special. Its only a valid tag if no
-		// text has been written before which in that case no
-		// text can be emitted afterwards. Otherwise, we map
-		// it to unknown to process it inline.
-		if (tag == .frameset) {
-		    if (!self.any_text) {
-			self.state = .frameset;
-			return html.len;
-		    }
-		    tag = .unknown;
-		}
+                // frameset is special. Its only a valid tag if no
+                // text has been written before which in that case no
+                // text can be emitted afterwards. Otherwise, we map
+                // it to unknown to process it inline.
+                if (tag == .frameset) {
+                    if (!self.any_text) {
+                        self.state = .frameset;
+                        return html.len;
+                    }
+                    tag = .unknown;
+                }
 
                 try self.stack.append(allocator, tag);
                 if (tag_properties.get(tag).is_ignore)
@@ -840,10 +840,10 @@ pub fn TextExtractor(T: type) type {
             return 1;
         }
 
-	fn handleFrameSet(self: *Self, html: []const u8) Error!usize {
-	    _ = self;
-	    return html.len;
-	}
+        fn handleFrameSet(self: *Self, html: []const u8) Error!usize {
+            _ = self;
+            return html.len;
+        }
     };
 }
 
@@ -1093,19 +1093,20 @@ fn expectHTML5(
     while (reader.takeDelimiterInclusive('\n')) |line| {
         if (std.mem.eql(u8, line, "#data\n")) {
             in_data = true;
-            if (html_da.items.len > 0) {
-                defer text_da.clearRetainingCapacity();
-                defer html_da.clearRetainingCapacity();
-                defer test_id += 1;
+            if (html_da.items.len == 0)
+                continue;
 
-                try expectHTML5CheckHelper(
-                    &html_da,
-                    &text_da,
-                    &overwrite_i,
-                    overwrite_exps,
-                    test_id,
-                );
-            }
+            defer text_da.clearRetainingCapacity();
+            defer html_da.clearRetainingCapacity();
+            defer test_id += 1;
+
+            try expectHTML5CheckHelper(
+                &html_da,
+                &text_da,
+                &overwrite_i,
+                overwrite_exps,
+                test_id,
+            );
         } else if (std.mem.eql(u8, line, "#text\n")) {
             in_data = false;
         } else if (in_data) {
@@ -1133,4 +1134,11 @@ test "html5lib_tests1" {
 
 test "html5lib_tests2" {
     try expectHTML5("tests2.ekdytest", &.{});
+}
+
+test "html5lib_tests3" {
+    // 4-6: Trimming of pre tags which requires buffering for ekdy.
+    try expectHTML5("tests3.ekdytest", &.{
+        .{ 4, "\n" }, .{ 5, "\nfoo" }, .{ 6, "\n\nfoo" }, .{ 7, "\nfoo\n" },
+    });
 }
