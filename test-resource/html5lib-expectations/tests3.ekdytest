@@ -29,6 +29,7 @@ foo
 
 foo</pre></body></html>
 #text
+
 foo
 #data
 <!DOCTYPE html><html><head></head><body><pre>
@@ -36,6 +37,7 @@ foo
 </pre></body></html>
 #text
 foo
+
 #data
 <!DOCTYPE html><html><head></head><body><pre>x</pre><span>
 </span></body></html>
@@ -57,6 +59,7 @@ y
 #data
 <!DOCTYPE html><pre>&#x0a;&#x0a;A</pre>
 #text
+
 A
 #data
 <!DOCTYPE html><HTML><META><HEAD></HEAD></HTML>

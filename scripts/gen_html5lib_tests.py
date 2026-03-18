@@ -135,7 +135,11 @@ def main():
                 print("#data")
                 print(html_code)
                 print("#text")
-                print(text_resp["result"]["value"])
+                val = text_resp["result"]["value"]
+                # When there is absolutely no text, chromium just inserts a new line?
+                if val == "\n":
+                    val = ""
+                print(val)
             ws.close()
 
     finally:

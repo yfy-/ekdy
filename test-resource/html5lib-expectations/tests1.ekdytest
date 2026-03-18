@@ -382,7 +382,8 @@ foo
 #data
 <table><tr><tr><td><td><span><th><span>X</table>
 #text
-X
+
+		X
 #data
 <body><body><base><link><meta><title><p></title><body><p></body>
 #text
