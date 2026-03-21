@@ -6,8 +6,8 @@ const std = @import("std");
 const html = @import("../html.zig");
 
 const tag_start_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
-    .hr = .double_break,
-    .xmp = .double_break,
+    .hr = .single_break,
+    .xmp = .single_break,
     .caption = .single_break,
     .colgroup = .single_break,
     .datalist = .single_break,
@@ -22,7 +22,6 @@ const tag_start_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .legend = .single_break,
     .li = .single_break,
     .menu = .single_break,
-    .menuitem = .single_break,
     .optgroup = .single_break,
     .option = .single_break,
     .summary = .single_break,
@@ -60,8 +59,8 @@ const tag_start_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
 });
 
 const tag_end_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
-    .hr = .double_break,
-    .xmp = .double_break,
+    .hr = .single_break,
+    .xmp = .single_break,
     .caption = .single_break,
     .colgroup = .single_break,
     .datalist = .single_break,
@@ -76,7 +75,6 @@ const tag_end_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .legend = .single_break,
     .li = .single_break,
     .menu = .single_break,
-    .menuitem = .single_break,
     .optgroup = .single_break,
     .option = .single_break,
     .summary = .single_break,
@@ -110,6 +108,7 @@ const tag_end_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .section = .double_break,
     .ul = .single_break,
     .table = .single_break,
+    .mi = .single_break,
 });
 
 // Tag properties is an array of tuples where each tuple is a tag and

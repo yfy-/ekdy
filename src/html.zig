@@ -185,6 +185,8 @@ pub const Tag = enum(u8) {
 
     // MathML tag
     annotation,
+    @"annotation-xml",
+    mi,
 };
 
 /// Obtain Tag from string.
@@ -232,17 +234,18 @@ pub const default_tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.
     .iframe = .{ .is_ignore = true, .is_rawtext = true },
     .map = .{ .is_ignore = true },
     .annotation = .{ .is_ignore = true },
+    .@"annotation-xml" = .{ .is_ignore = true },
     .noembed = .{ .is_ignore = true, .is_rawtext = true },
     .noframes = .{ .is_ignore = true, .is_rawtext = true },
 
     // ekdy should act as if JS is disabled, therefore we treat
-    // noscript and object as ordinary tags.
+    // noscript and object as inline tags.
     // .noscript = .{ .is_ignore = true, .is_rawtext = true },
     // .object = .{ .is_ignore = true },
     .picture = .{ .is_ignore = true },
     .script = .{ .is_ignore = true, .is_rawtext = true },
     .style = .{ .is_ignore = true, .is_rawtext = true },
-    // .svg = .{ .is_ignore = true },
+    .svg = .{ .is_ignore = true },
     .template = .{ .is_ignore = true },
     .video = .{ .is_ignore = true },
     .plaintext = .{ .is_rawtext = true, .is_void = true },
@@ -250,6 +253,7 @@ pub const default_tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.
     .title = .{ .is_rcdata = true, .is_ignore = true },
     .xmp = .{ .is_rawtext = true, .is_preformatted = true },
     .pre = .{ .is_preformatted = true },
+    .rp = .{ .is_ignore = true },
 });
 
 pub const tag_to_enum = std.StaticStringMap(Tag).initComptime(blk: {
@@ -422,7 +426,6 @@ pub fn TextExtractor(T: type) type {
             allocator: Allocator,
             html: []const u8,
         ) Error!usize {
-            const c = html[0];
             const tag = self.stack.getLastOrNull();
             const tag_prop = if (tag) |t| tag_properties.get(t) else null;
 
@@ -432,6 +435,7 @@ pub fn TextExtractor(T: type) type {
                 return 0;
             }
 
+            const c = html[0];
             if (c == '<') {
                 if (tag == null or (!tag_prop.?.is_rawtext and !tag_prop.?.is_rcdata)) {
                     self.state = State.tag;
@@ -454,7 +458,8 @@ pub fn TextExtractor(T: type) type {
                 }
             }
 
-            if (self.ignore_depth > 0) return 1;
+            // Text in <math> is ignored unless other math related tags are used.
+            if (self.ignore_depth > 0 or (tag != null and tag.? == .math)) return 1;
 
             if (self.preformatted_depth == 0 and ascii.isWhitespace(c)) {
                 // When last processed tag was br and it inserted a new line,
@@ -478,8 +483,8 @@ pub fn TextExtractor(T: type) type {
                 }
             }
 
-            try w.writeByte(c);
-            self.any_text = true;
+            if (c != 0) try w.writeByte(c);
+            self.any_text = self.any_text or self.out_writer.buffer.len > 0;
             self.pending_whitespace = null;
             self.last_br = false;
             return 1;
@@ -611,21 +616,25 @@ pub fn TextExtractor(T: type) type {
             return 1;
         }
 
-        fn popMatching(self: *Self, end_tag: Tag) void {
+        fn popUntilMatching(self: *Self, end_tag: Tag) bool {
             var found_idx = self.stack.items.len;
             while (found_idx > 0) : (found_idx -= 1) {
                 if (end_tag == self.stack.items[found_idx - 1]) {
-                    _ = self.stack.orderedRemove(found_idx - 1);
-                    const tp = tag_properties.get(end_tag);
-                    if (tp.is_ignore)
-                        self.ignore_depth -|= 1;
+                    for (self.stack.items[found_idx - 1 ..]) |pop_tag| {
+                        const tp = tag_properties.get(pop_tag);
+                        if (tp.is_ignore)
+                            self.ignore_depth -|= 1;
 
-                    if (tp.is_preformatted)
-                        self.preformatted_depth -|= 1;
+                        if (tp.is_preformatted)
+                            self.preformatted_depth -|= 1;
+                    }
 
-                    return;
+                    self.stack.items.len = found_idx - 1;
+                    return true;
                 }
             }
+
+            return false;
         }
 
         //<strong >ekdy...</strong >
@@ -645,15 +654,16 @@ pub fn TextExtractor(T: type) type {
                 // Non void tag, or tag that does not end with /.
                 if (self.tag_buffer.items.len > 0) {
                     const end_tag = tag_from_str(self.tag_buffer.items);
+                    const match = self.popUntilMatching(end_tag);
                     if (@hasDecl(T, "onTagEnd")) {
-                        if (try self.policy.onTagEnd(
+                        const ws = try self.policy.onTagEnd(
                             end_tag,
                             self.writer(tag_properties.get(end_tag)),
-                        )) |ws| {
-                            try self.queueWhitespace(ws);
+                        );
+                        if (ws != null and match) {
+                            try self.queueWhitespace(ws.?);
                         }
                     }
-                    self.popMatching(end_tag);
                 } else {
                     // Tag buffer is empty if it's void tag, just pop it.
                     _ = self.stack.pop();
@@ -719,6 +729,11 @@ pub fn TextExtractor(T: type) type {
             if (html.len > 2 and std.mem.eql(u8, html[0..3], "-->")) {
                 self.state = State.text;
                 return 3;
+            }
+
+            if (html.len > 3 and std.mem.eql(u8, html[0..4], "--!>")) {
+                self.state = State.text;
+                return 4;
             }
 
             return 1;
@@ -1032,8 +1047,8 @@ test "integration_vertex_cover" {
 fn expectHTML5CheckHelper(
     html_da: *ArrayList(u8),
     text_da: *ArrayList(u8),
-    overwrite_index: *u64,
-    overwrite_exps: []const struct { u64, []const u8 },
+    deviation_index: *u64,
+    deviations: []const struct { u64, []const u8 },
     test_id: u64,
 ) !void {
     _ = text_da.pop();
@@ -1041,11 +1056,11 @@ fn expectHTML5CheckHelper(
 
     var exp: []const u8 = text_da.items;
     // Override expectation for the test ID.
-    if (overwrite_index.* < overwrite_exps.len and
-        test_id == overwrite_exps[overwrite_index.*].@"0")
+    if (deviation_index.* < deviations.len and
+        test_id == deviations[deviation_index.*].@"0")
     {
-        exp = overwrite_exps[overwrite_index.*].@"1";
-        overwrite_index.* += 1;
+        exp = deviations[deviation_index.*].@"1";
+        deviation_index.* += 1;
     }
 
     expectConvert(exp, html_da.items) catch |terr| {
@@ -1063,7 +1078,7 @@ fn expectHTML5CheckHelper(
 /// HTML5 or the inner policy provided to TextExtractor.
 fn expectHTML5(
     comptime ekdytest_filename: []const u8,
-    overwrite_exps: []const struct { u64, []const u8 },
+    deviations: []const struct { u64, []const u8 },
 ) !void {
     const src_dir = fs.path.dirname(@src().file) orelse "";
     const ekdytest_path = try fs.path.join(
@@ -1089,7 +1104,7 @@ fn expectHTML5(
 
     var in_data = false;
     var test_id: u64 = 0;
-    var overwrite_i: u64 = 0;
+    var deviation_i: u64 = 0;
     while (reader.takeDelimiterInclusive('\n')) |line| {
         if (std.mem.eql(u8, line, "#data\n")) {
             in_data = true;
@@ -1103,8 +1118,8 @@ fn expectHTML5(
             try expectHTML5CheckHelper(
                 &html_da,
                 &text_da,
-                &overwrite_i,
-                overwrite_exps,
+                &deviation_i,
+                deviations,
                 test_id,
             );
         } else if (std.mem.eql(u8, line, "#text\n")) {
@@ -1116,18 +1131,21 @@ fn expectHTML5(
         }
     } else |err| {
         if (err != error.EndOfStream) return err;
-        try expectHTML5CheckHelper(&html_da, &text_da, &overwrite_i, overwrite_exps, test_id);
+        try expectHTML5CheckHelper(&html_da, &text_da, &deviation_i, deviations, test_id);
     }
 }
 
 test "html5lib_tests1" {
-    // 34: Special case for <select>, <option> and <optgroup>
-    // 77-79: Special case for <table> that require foster parenting.
+    // 34: <select> without <option> or <optgroup>
+    // 75: Most likely adoption rules are fixing the tree.
+    // 77-79: <table> foster parenting.
+    // 86: Table <tr> and <td> handling.
     try expectHTML5(
         "tests1.ekdytest",
         &.{
-            .{ 34, "A\nB\nCD\nE" },   .{ 77, "ababr\nx\naoe" }, .{ 78, "aba\nbrx\naoe" },
-            .{ 79, "aba\nbrx\naoe" },
+            .{ 34, "A\nB\nCD\nE" },   .{ 75, "abc def ghi\n\njkl mno pqr stu" },
+            .{ 77, "ababr\nx\naoe" }, .{ 78, "aba\nbrx\naoe" },
+            .{ 79, "aba\nbrx\naoe" }, .{ 86, "X" },
         },
     );
 }
@@ -1137,8 +1155,227 @@ test "html5lib_tests2" {
 }
 
 test "html5lib_tests3" {
-    // 4-6: Trimming of pre tags which requires buffering for ekdy.
-    try expectHTML5("tests3.ekdytest", &.{
-        .{ 4, "\n" }, .{ 5, "\nfoo" }, .{ 6, "\n\nfoo" }, .{ 7, "\nfoo\n" },
+    // 4-7 and 11: <pre> tags omit only the first whitespace character.
+    try expectHTML5(
+        "tests3.ekdytest",
+        &.{
+            .{ 4, "\n" }, .{ 5, "\nfoo" }, .{ 6, "\n\nfoo" }, .{ 7, "\nfoo\n" }, .{ 11, "\n\nA" },
+        },
+    );
+}
+
+test "html5lib_tests4" {
+    try expectHTML5("tests4.ekdytest", &.{});
+}
+
+test "html5lib_tests5" {
+    try expectHTML5("tests5.ekdytest", &.{});
+}
+
+test "html5lib_tests6" {
+    try expectHTML5("tests6.ekdytest", &.{});
+}
+
+test "html5lib_tests7" {
+    // 23-24: <select> without <option> or <optgroup>
+    // 30-31: <table> foster parenting.
+    // 32: <table>
+    try expectHTML5("tests7.ekdytest", &.{
+        .{ 23, "X" }, .{ 24, "X" }, .{ 30, "aaabbb\nccc" }, .{ 31, "A\nB B" }, .{ 32, "A\nB C" },
     });
+}
+
+test "html5lib_tests8" {
+    // 7: <table> tag ending without </table> causes a newline in
+    // chromium but not in ekdy as </table> does not exist.
+    try expectHTML5("tests8.ekdytest", &.{.{ 7, "xx" }});
+}
+
+test "html5lib_tests9" {
+    // 8: Math parsing.
+    // 17-18: Cursed case of both <select> and <table>.
+    try expectHTML5("tests9.ekdytest", &.{
+        .{ 17, "foo\nbar\n\nbaz\n\nquux" }, .{ 18, "foo\nbar\n\nbaz\n\nquux" },
+    });
+}
+
+test "html5lib_tests10" {
+    // 13, 15, 18-19, 30: SVG parsing.
+    try expectHTML5("tests10.ekdytest", &.{
+        .{ 13, "quux" }, .{ 15, "quux" }, .{ 18, "" }, .{ 19, "" }, .{ 30, "a" }, .{ 31, "a" },
+    });
+}
+
+test "html5lib_tests11" {
+    try expectHTML5("tests11.ekdytest", &.{});
+}
+
+test "html5lib_tests12" {
+    // 0-1: Math parsing.
+    try expectHTML5("tests12.ekdytest", &.{ .{ 0, "foobaz\n\nbar" }, .{ 1, "foobaz\n\nbar" } });
+}
+
+test "html5lib_tests14" {
+    try expectHTML5("tests14.ekdytest", &.{});
+}
+
+test "html5lib_tests15" {
+    try expectHTML5("tests15.ekdytest", &.{});
+}
+
+test "html5lib_tests16" {
+    try expectHTML5("tests16.ekdytest", &.{});
+}
+
+test "html5lib_tests17" {
+    // 2-3: <table> parsing.
+    try expectHTML5("tests17.ekdytest", &.{ .{ 2, "" }, .{ 3, "" } });
+}
+
+test "html5lib_tests18" {
+    // 13-15: <template> parsing.
+    // 21: <svg> parsing.
+    // 27-29: <select> parsing.
+    // 35: <table> indentation.
+    try expectHTML5("tests18.ekdytest", &.{
+        .{ 13, "</plaintext>X" },  .{ 14, "a<caption>b" }, .{ 15, "a</template>b" },
+        .{ 21, "a</plaintext>b" }, .{ 27, "abc" },         .{ 28, "abc" },
+        .{ 29, "abc" },            .{ 35, "abc" },
+    });
+}
+
+test "html5lib_tests19" {
+    // 61: <br> with no text does not emit \n.
+    try expectHTML5("tests19.ekdytest", &.{ .{ 23, "abcfoo" }, .{ 61, "\n" } });
+}
+
+test "html5lib_tests20" {
+    try expectHTML5("tests20.ekdytest", &.{});
+}
+
+test "html5lib_tests21" {
+    try expectHTML5("tests21.ekdytest", &.{});
+}
+
+test "html5lib_tests22" {
+    try expectHTML5("tests22.ekdytest", &.{});
+}
+
+test "html5lib_tests23" {
+    try expectHTML5("tests23.ekdytest", &.{});
+}
+
+test "html5lib_tests24" {
+    try expectHTML5("tests24.ekdytest", &.{});
+}
+
+test "html5lib_tests25" {
+    try expectHTML5("tests25.ekdytest", &.{});
+}
+
+test "html5lib_tests26" {
+    // 10: <svg> parsing.
+    try expectHTML5("tests26.ekdytest", &.{ .{ 10, "" }, .{ 11, "" } });
+}
+
+// Adoption is not possible with ekdy, so its best effort.
+test "html5lib_adoption01" {
+    // 4: Adoption
+    // 10-11: <table> foster parenting.
+    // 23: <h*> type of tags can be closed by any of them.
+    try expectHTML5("adoption01.ekdytest", &.{
+        .{ 4, "1\n2\n345" }, .{ 10, "1\n23" }, .{ 11, "A\nBC" }, .{ 23, "abcfoo" },
+    });
+}
+
+test "html5lib_adoption02" {
+    try expectHTML5("adoption01.ekdytest", &.{
+        .{ 4, "1\n2\n345" }, .{ 10, "1\n23" }, .{ 11, "A\nBC" },
+    });
+}
+
+test "html5lib_blocks" {
+    // 10-13: <details>, <dialog> handling requires attribute
+    // buffering for open attribute.
+    // 16-17, 20-23, 26-29, 32-35, 44-47: Auto inserted </p>.
+    try expectHTML5("blocks.ekdytest", &.{
+        .{ 10, "foo\n\nbar\n\nbaz" }, .{ 11, "foo\n\nbar" },      .{ 12, "foo\n\nbar\n\nbaz" },
+        .{ 13, "foo\n\nbar" },        .{ 16, "foo\nbar\n\nbaz" }, .{ 17, "foo\nbar" },
+        .{ 20, "foo\nbar\n\nbaz" },   .{ 21, "foo\nbar" },        .{ 22, "foo\nbar\n\nbaz" },
+        .{ 23, "foo\nbar" },          .{ 26, "foo\nbar\n\nbaz" }, .{ 27, "foo\nbar" },
+        .{ 28, "foo\nbar\n\nbaz" },   .{ 29, "foo\nbar" },        .{ 32, "foobar\n\nbaz" },
+        .{ 33, "foobar" },            .{ 34, "foo\nbar\n\nbaz" }, .{ 35, "foo\nbar" },
+        .{ 44, "foo\nbar\n\nbaz" },   .{ 45, "foo\nbar" },        .{ 46, "foo\nbar\n\nbaz" },
+        .{ 47, "foo\nbar" },
+    });
+}
+
+test "html5lib_comments01" {
+    try expectHTML5("comments01.ekdytest", &.{});
+}
+
+test "html5lib_doctype01" {
+    try expectHTML5("doctype01.ekdytest", &.{});
+}
+
+test "html5lib_domjs-unsafe" {
+    try expectHTML5("domjs-unsafe.ekdytest", &.{});
+}
+
+test "html5lib_entities01" {
+    try expectHTML5("entities01.ekdytest", &.{});
+}
+
+test "html5lib_entities02" {
+    try expectHTML5("entities02.ekdytest", &.{});
+}
+
+test "html5lib_foreign-fragment" {
+    try expectHTML5("foreign-fragment.ekdytest", &.{});
+}
+
+test "html5lib_html5test-com" {
+    try expectHTML5("html5test-com.ekdytest", &.{});
+}
+
+test "html5lib_inbody01" {
+    try expectHTML5("inbody01.ekdytest", &.{});
+}
+
+test "html5lib_isindex" {
+    try expectHTML5("isindex.ekdytest", &.{});
+}
+
+test "html5lib_main-element" {
+    try expectHTML5("main-element.ekdytest", &.{});
+}
+
+test "html5lib_math" {
+    try expectHTML5("math.ekdytest", &.{});
+}
+
+test "html5lib_menuitem-element" {
+    try expectHTML5("menuitem-element.ekdytest", &.{});
+}
+
+test "html5lib_namespace-sensitivity" {
+    // 0: <svg>
+    try expectHTML5("namespace-sensitivity.ekdytest", &.{.{ 0, "" }});
+}
+
+test "html5lib_noscript01" {
+    try expectHTML5("noscript01.ekdytest", &.{});
+}
+
+test "html5lib_pending-spec-changes-plain-text-unsafe" {
+    try expectHTML5("pending-spec-changes-plain-text-unsafe.ekdytest", &.{});
+}
+
+test "html5lib_pending-spec-changes" {
+    // 2: <table>
+    try expectHTML5("pending-spec-changes.ekdytest", &.{.{2, ""}});
+}
+
+test "html5lib_plain-text-unsafe" {
+    try expectHTML5("plain-text-unsafe.ekdytest", &.{});
 }
