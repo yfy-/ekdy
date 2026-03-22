@@ -290,6 +290,10 @@ pub fn TextExtractor(T: type) type {
         /// Flag to check if attribute value has started.
         attr_val_start: bool = false,
 
+        /// Flag to identify first character of preformatted text.
+        /// Preformatted text omits the first character if its '\n'.
+        preformatted_first: bool = false,
+
         /// Parser state.
         state: State = .text,
 
@@ -310,7 +314,7 @@ pub fn TextExtractor(T: type) type {
         tag_buffer: ArrayList(u8),
 
         /// Entity decoder.
-        decoder: decoding.EntityDecoder,
+        decoder: decoding.EntityDecoder = decoding.EntityDecoder{},
 
         /// Text policy.
         policy: *T,
@@ -350,7 +354,6 @@ pub fn TextExtractor(T: type) type {
             return Self{
                 .tag_buffer = try ArrayList(u8).initCapacity(allocator, 32),
                 .out_writer = out_writer,
-                .decoder = decoding.EntityDecoder.init(out_writer),
                 .policy = policy,
             };
         }
@@ -395,28 +398,16 @@ pub fn TextExtractor(T: type) type {
         pub fn eos(self: *Self) !void {
             switch (self.state) {
                 .tag => {
-                    try self.decoder_w().writeByte('<');
+                    try self.out_writer.writeByte('<');
                 },
                 .tag_end => {
                     // Only output </ when tag buffer is empty.
                     // If any tag has started than output nothing.
                     if (self.tag_buffer.items.len == 0)
-                        _ = try self.decoder_w().write("</");
+                        _ = try self.out_writer.write("</");
                 },
                 else => {},
             }
-            try self.decoder_w().flush();
-        }
-
-        fn decoder_w(self: *Self) *Writer {
-            return &self.decoder.writer;
-        }
-
-        fn writer(self: *Self, tag_prop: ?TagProperty) *Writer {
-            return if (tag_prop == null or !tag_prop.?.is_rawtext)
-                self.decoder_w()
-            else
-                self.out_writer;
         }
 
         //<p>ekdy...</p>
@@ -470,8 +461,6 @@ pub fn TextExtractor(T: type) type {
                 return 1;
             }
 
-            const w = self.writer(tag_prop);
-
             if (self.pending_whitespace) |pw| {
                 if (self.any_text) {
                     const ws = switch (pw) {
@@ -479,15 +468,62 @@ pub fn TextExtractor(T: type) type {
                         .single_break => "\n",
                         .double_break => "\n\n",
                     };
-                    try w.writeAll(ws);
+                    try self.out_writer.writeAll(ws);
+                }
+            }
+            self.pending_whitespace = null;
+            const consumed = try self.emitText(html, tag, tag_prop);
+            self.last_br = false;
+            return consumed;
+        }
+
+        fn emitText(self: *Self, html: []const u8, tag: ?Tag, tag_prop: ?TagProperty) Error!usize {
+            var consumed: usize = 1;
+
+            // Write decoding.
+            const c = html[0];
+            if (c == '&' and (tag == null or !tag_prop.?.is_rawtext)) {
+                const decoded = self.decoder.decode(html[1..]);
+                if (decoded.@"1") |cps| {
+                    consumed += decoded.@"0";
+
+                    // Decoded could be ascii whitespace.
+                    if (cps[1] == 0 and cps[0] <= std.math.maxInt(u8) and
+                        ascii.isWhitespace(@intCast(cps[0])))
+                    {
+                        if (self.preformatted_depth > 0) {
+                            try self.emitPreformattedWhitespace(@intCast(cps[0]));
+                        } else {
+                            try self.queueWhitespace(.space);
+                        }
+                    } else {
+                        try self.out_writer.print("{u}", .{cps[0]});
+                        if (cps[1] != 0) try self.out_writer.print("{u}", .{cps[1]});
+                    }
+                } else {
+                    try self.out_writer.writeByte(c);
+                }
+            } else if (c != 0) {
+                if (self.preformatted_depth > 0) {
+                    try self.emitPreformattedWhitespace(c);
+                } else {
+                    try self.out_writer.writeByte(c);
                 }
             }
 
-            if (c != 0) try w.writeByte(c);
-            self.any_text = self.any_text or self.out_writer.buffer.len > 0;
-            self.pending_whitespace = null;
-            self.last_br = false;
-            return 1;
+            self.any_text = true;
+            self.preformatted_first = false;
+            return consumed;
+        }
+
+        fn emitPreformattedWhitespace(self: *Self, c: u8) Error!void {
+            var c_out = c;
+            // preformatted mode turns \r to \n.
+            if (c_out == '\r')
+                c_out = '\n';
+
+            if (c_out != '\n' or !self.preformatted_first)
+                try self.out_writer.writeByte(c_out);
         }
 
         //<p>ekdy...</p>
@@ -498,7 +534,7 @@ pub fn TextExtractor(T: type) type {
         fn handleTag(self: *Self, html: []const u8) Error!usize {
             const c = html[0];
             if (!is_valid_fs_tag_char(c)) {
-                try self.decoder_w().writeByte('<');
+                try self.out_writer.writeByte('<');
                 self.state = State.text;
                 return 0;
             }
@@ -544,8 +580,10 @@ pub fn TextExtractor(T: type) type {
                 if (tag_properties.get(tag).is_ignore)
                     self.ignore_depth += 1;
 
-                if (tag_properties.get(tag).is_preformatted)
+                if (tag_properties.get(tag).is_preformatted) {
                     self.preformatted_depth += 1;
+                    if (self.preformatted_depth == 1) self.preformatted_first = true;
+                }
 
                 self.tag_buffer.clearRetainingCapacity();
                 self.state = State.tag_start_found;
@@ -572,12 +610,12 @@ pub fn TextExtractor(T: type) type {
 
             // br is forced line break..
             if (tag == .br) {
-                try self.writer(tag_properties.get(tag)).writeByte('\n');
+                try self.out_writer.writeByte('\n');
                 self.last_br = true;
             }
 
             if (@hasDecl(T, "onTagStart")) {
-                if (try self.policy.onTagStart(tag, self.writer(tag_properties.get(tag)))) |ws| {
+                if (try self.policy.onTagStart(tag, self.out_writer)) |ws| {
                     try self.queueWhitespace(ws);
                 }
             }
@@ -625,8 +663,10 @@ pub fn TextExtractor(T: type) type {
                         if (tp.is_ignore)
                             self.ignore_depth -|= 1;
 
-                        if (tp.is_preformatted)
+                        if (tp.is_preformatted) {
                             self.preformatted_depth -|= 1;
+                            if (self.preformatted_depth == 0) self.preformatted_first = false;
+                        }
                     }
 
                     self.stack.items.len = found_idx - 1;
@@ -658,7 +698,7 @@ pub fn TextExtractor(T: type) type {
                     if (@hasDecl(T, "onTagEnd")) {
                         const ws = try self.policy.onTagEnd(
                             end_tag,
-                            self.writer(tag_properties.get(end_tag)),
+                            self.out_writer,
                         );
                         if (ws != null and match) {
                             try self.queueWhitespace(ws.?);
@@ -742,7 +782,16 @@ pub fn TextExtractor(T: type) type {
         //<plaintext>ekdy...
         //           ^~~~~~~
         fn handlePlaintext(self: *Self, html: []const u8) Error!usize {
-            try self.out_writer.writeAll(html);
+            // In plaintext null bytes are printed as invalid as
+            // opposed to normal text mode where they are ignored.
+            for (html) |c| {
+                if (c == 0) {
+                    try self.out_writer.print("{u}", .{decoding.html_unicode_invalid});
+                } else {
+                    try self.out_writer.writeByte(c);
+                }
+            }
+
             return html.len;
         }
 
@@ -1158,9 +1207,7 @@ test "html5lib_tests3" {
     // 4-7 and 11: <pre> tags omit only the first whitespace character.
     try expectHTML5(
         "tests3.ekdytest",
-        &.{
-            .{ 4, "\n" }, .{ 5, "\nfoo" }, .{ 6, "\n\nfoo" }, .{ 7, "\nfoo\n" }, .{ 11, "\n\nA" },
-        },
+        &.{},
     );
 }
 
@@ -1373,9 +1420,22 @@ test "html5lib_pending-spec-changes-plain-text-unsafe" {
 
 test "html5lib_pending-spec-changes" {
     // 2: <table>
-    try expectHTML5("pending-spec-changes.ekdytest", &.{.{2, ""}});
+    try expectHTML5("pending-spec-changes.ekdytest", &.{.{ 2, "" }});
 }
 
 test "html5lib_plain-text-unsafe" {
-    try expectHTML5("plain-text-unsafe.ekdytest", &.{});
+    // 13-27: <svg>
+    try expectHTML5("plain-text-unsafe.ekdytest", &.{ .{ 13, "" }, .{ 27, "" } });
+}
+
+test "html5lib_quirks01" {
+    try expectHTML5("quirks01.ekdytest", &.{});
+}
+
+test "html5lib_ruby" {
+    try expectHTML5("ruby.ekdytest", &.{});
+}
+
+test "html5lib_scriptdata01" {
+    try expectHTML5("scriptdata01.ekdytest", &.{});
 }

@@ -3,16 +3,15 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 
+pub const html_unicode_max: u21 = 0x10FFFF;
+pub const html_unicode_invalid: u21 = 0xFFFD;
+
 /// Provides an unbuffered writer interface for decoding HTML
 /// entities. Output will be written to the given output writer.
 pub const EntityDecoder = struct {
-    const Writer = std.io.Writer;
     const Self = @This();
-    const html_unicode_max: u21 = 0x10FFFF;
-    const html_unicode_invalid: u21 = 0xFFFD;
 
     const State = enum {
-        text,
         entity_begin,
         numeric_begin,
         hex_begin,
@@ -21,78 +20,15 @@ pub const EntityDecoder = struct {
         entity_named,
     };
 
-    state: State = .text,
+    state: State = .entity_begin,
     named_entity_len: u8 = 0,
     numeric_entity: u21 = 0,
-    out_writer: *Writer,
-    named_entity: [31]u8 = undefined,
-    hex_char: ?u8 = null,
-    any_text: bool = true,
-    writer: Writer,
+    named_entity: [32]u8 = undefined,
 
-    pub fn init(out_writer: *Writer) Self {
-        return Self{
-            .writer = .{
-                .buffer = &.{},
-                .vtable = &vtable,
-            },
-            .out_writer = out_writer,
-        };
-    }
-
-    fn drain(w: *Writer, data: []const []const u8, splat: usize) Writer.Error!usize {
-        const self: *Self = @fieldParentPtr("writer", w);
-
-        try self.write_decoding(w.buffer);
-        var written: usize = 0;
-        for (data, 0..) |d, i| {
-            const curr_splat = if (i == data.len - 1) splat else 1;
-            for (0..curr_splat) |_| {
-                try self.write_decoding(d);
-                written += d.len;
-            }
-        }
-
-        w.end = 0;
-        return written;
-    }
-
-    fn flush(w: *Writer) Writer.Error!void {
-        const self: *Self = @fieldParentPtr("writer", w);
-        try w.defaultFlush();
-
-        // Just output the remaining if we stop at an invalid state.
-        switch (self.state) {
-            .entity_begin => {
-                try self.out_writer.writeByte('&');
-            },
-            .numeric_begin => {
-                _ = try self.out_writer.write("&#");
-            },
-            .hex_begin => {
-                _ = try self.out_writer.print("&#{c}", .{self.hex_char.?});
-            },
-            .entity_decimal, .entity_hex => {
-                try self.out_writer.print("{u}", .{self.numeric_codepoint()});
-            },
-            .entity_named => {
-                _ = try self.write_named_longest_match();
-            },
-            .text => {},
-        }
-        try self.out_writer.flush();
-    }
-
-    const vtable: Writer.VTable = .{
-        .drain = drain,
-        .flush = flush,
-    };
-
-    fn transition_to_text(self: *Self) void {
-        self.state = .text;
+    pub fn reset(self: *Self) void {
         self.named_entity_len = 0;
         self.numeric_entity = 0;
-        self.hex_char = null;
+	self.state = .entity_begin;
     }
 
     fn numeric_codepoint(self: *Self) u21 {
@@ -109,44 +45,24 @@ pub const EntityDecoder = struct {
 
     /// Writes longest matching named entity if there are any matches.
     /// Otherwise write whatever has been buffered.
-    fn write_named_longest_match(self: *Self) !void {
+    fn match_named_longest(self: *Self) struct { usize, ?[2]u21 } {
         var i = self.named_entity_len;
         while (i > 1) : (i -= 1) {
             const ent_name = self.named_entity[0..i];
             if (encoding_entity_map.get(ent_name)) |*codepoints| {
-                try self.out_writer.print("{u}", .{codepoints.*[0]});
-                if (codepoints.*[1] != 0) {
-                    try self.out_writer.print("{u}", .{codepoints.*[1]});
-                }
-
-                // Dump whatever unmatched.
-                try self.out_writer.writeAll(
-                    self.named_entity[i..self.named_entity_len],
-                );
-
-                return;
+                return .{ i, codepoints.* };
             }
-        } else {
-            try self.out_writer.print(
-                "&{s}",
-                .{self.named_entity[0..self.named_entity_len]},
-            );
         }
+
+        return .{ 0, null };
     }
 
     /// Write a chunk decoding.
-    fn write_decoding(self: *Self, chunk: []const u8) Writer.Error!void {
+    pub fn decode(self: *Self, chunk: []const u8) struct { usize, ?[2]u21 } {
         // FIXME: This has become so much complex than I initially thought.
         // It will look simpler if each state has its own function.
-        for (chunk) |c| {
+        for (chunk, 0..) |c, i| {
             switch (self.state) {
-                .text => {
-                    if (c == '&') {
-                        self.state = .entity_begin;
-                    } else {
-                        try self.out_writer.writeByte(c);
-                    }
-                },
                 .entity_begin => {
                     switch (c) {
                         '#' => self.state = .numeric_begin,
@@ -155,19 +71,15 @@ pub const EntityDecoder = struct {
                             self.named_entity_len += 1;
                             self.state = .entity_named;
                         },
-                        '&' => {
-                            try self.out_writer.writeByte('&');
-                        },
                         else => {
-                            try self.out_writer.print("&{c}", .{c});
-                            self.transition_to_text();
+                            defer self.reset();
+                            return .{ 0, null };
                         },
                     }
                 },
                 .numeric_begin => {
                     switch (c) {
                         'x', 'X' => {
-                            self.hex_char = c;
                             self.state = .hex_begin;
                         },
                         '0'...'9' => {
@@ -178,8 +90,8 @@ pub const EntityDecoder = struct {
                             self.state = .entity_decimal;
                         },
                         else => {
-                            try self.out_writer.print("&#{c}", .{c});
-                            self.transition_to_text();
+                            defer self.reset();
+                            return .{ 0, null };
                         },
                     }
                 },
@@ -193,16 +105,16 @@ pub const EntityDecoder = struct {
                             self.state = .entity_hex;
                         },
                         else => {
-                            try self.out_writer.print("&#{c}{c}", .{ self.hex_char.?, c });
-                            self.transition_to_text();
+                            defer self.reset();
+                            return .{ 0, null };
                         },
                     }
                 },
                 .entity_decimal => {
                     switch (c) {
                         ';' => {
-                            try self.out_writer.print("{u}", .{self.numeric_codepoint()});
-                            self.transition_to_text();
+                            defer self.reset();
+                            return .{ i + 1, .{ self.numeric_codepoint(), 0 } };
                         },
                         '0'...'9' => {
                             self.numeric_entity *|= 10;
@@ -212,19 +124,16 @@ pub const EntityDecoder = struct {
                             ) catch unreachable;
                         },
                         else => {
-                            try self.out_writer.print(
-                                "{u}{c}",
-                                .{ self.numeric_codepoint(), c },
-                            );
-                            self.transition_to_text();
+                            defer self.reset();
+                            return .{ i, .{ self.numeric_codepoint(), 0 } };
                         },
                     }
                 },
                 .entity_hex => {
                     switch (c) {
                         ';' => {
-                            try self.out_writer.print("{u}", .{self.numeric_codepoint()});
-                            self.transition_to_text();
+                            defer self.reset();
+                            return .{ i + 1, .{ self.numeric_codepoint(), 0 } };
                         },
                         '0'...'9', 'a'...'f', 'A'...'F' => {
                             self.numeric_entity *|= 16;
@@ -234,33 +143,23 @@ pub const EntityDecoder = struct {
                             ) catch unreachable;
                         },
                         else => {
-                            try self.out_writer.print(
-                                "{u}{c}",
-                                .{ self.numeric_codepoint(), c },
-                            );
-                            self.transition_to_text();
+                            defer self.reset();
+                            return .{ i, .{ self.numeric_codepoint(), 0 } };
                         },
                     }
                 },
                 .entity_named => {
-                    if (self.named_entity_len == 31) {
-                        try self.out_writer.print(
-                            "&{s}{c}",
-                            .{ self.named_entity[0..self.named_entity_len], c },
-                        );
-
-                        self.transition_to_text();
+                    if (self.named_entity_len == 32) {
+                        defer self.reset();
+                        return .{ 0, null };
                     } else if (!std.ascii.isAlphanumeric(c)) {
-			if (c == ';') {
-			    self.named_entity[self.named_entity_len] = c;
-			    self.named_entity_len += 1;
-			}
+                        defer self.reset();
+                        if (c == ';') {
+                            self.named_entity[self.named_entity_len] = c;
+                            self.named_entity_len += 1;
+                        }
 
-                        _ = try self.write_named_longest_match();
-
-                        // Dump the char if named entity ends invalid.
-                        if (c != ';') try self.out_writer.writeByte(c);
-                        self.transition_to_text();
+                        return self.match_named_longest();
                     } else {
                         self.named_entity[self.named_entity_len] = c;
                         self.named_entity_len += 1;
@@ -268,49 +167,65 @@ pub const EntityDecoder = struct {
                 },
             }
         }
+
+        defer self.reset();
+        return switch (self.state) {
+            .entity_begin, .numeric_begin, .hex_begin => .{ 0, null },
+            .entity_decimal, .entity_hex => .{ chunk.len, .{ self.numeric_codepoint(), 0 } },
+            .entity_named => self.match_named_longest(),
+        };
     }
 };
 
 const talloc = std.testing.allocator;
 
-fn expectDecodeEntity(entity: []const u8, expected: []const u8) !void {
+fn expectDecodeEntity(entity: []const u8, expected: struct { usize, []const u8 }) !void {
     var allocating = std.io.Writer.Allocating.init(talloc);
     defer allocating.deinit();
-    var decoder = EntityDecoder.init(&allocating.writer);
-    const decoder_w = &decoder.writer;
-    try decoder_w.writeAll(entity);
-    const act = try allocating.toOwnedSlice();
-    defer talloc.free(act);
-    try std.testing.expectEqualStrings(expected, act);
+    var decoder = EntityDecoder{};
+    const decoded = decoder.decode(entity);
+    const writer = &allocating.writer;
+    if (decoded.@"1") |cps| {
+        try writer.print("{u}", .{cps[0]});
+        if (cps[1] != 0) try writer.print("{u}", .{cps[1]});
+        const act = try allocating.toOwnedSlice();
+        defer talloc.free(act);
+
+        try std.testing.expectEqualStrings(expected.@"1", act);
+    } else {
+        try std.testing.expectEqual(expected.@"1".len, 0);
+    }
+
+    try std.testing.expectEqual(expected.@"0", decoded.@"0");
 }
 
 test "decodeEntityDecimal" {
-    try expectDecodeEntity("&#8790;", "≖");
+    try expectDecodeEntity("#8790;", .{ 6, "≖" });
 }
 
 test "decodeEntityHex" {
-    try expectDecodeEntity("&#x2244;", "≄");
-    try expectDecodeEntity("&#X2244;", "≄");
+    try expectDecodeEntity("#x2244;", .{ 7, "≄" });
+    try expectDecodeEntity("#X2244;", .{ 7, "≄" });
 }
 
 test "decodeEntityKeyword" {
-    try expectDecodeEntity("&Icy;", "И");
+    try expectDecodeEntity("Icy;", .{ 4, "И" });
 }
 
 test "decodeEntityKeywordDoublePoint" {
-    try expectDecodeEntity("&nsupseteqq;", "⫆̸");
+    try expectDecodeEntity("nsupseteqq;", .{ 11, "⫆̸" });
 }
 
 test "decodeSimpleChar" {
-    try expectDecodeEntity("a", "a");
+    try expectDecodeEntity("a", .{ 0, "" });
 }
 
 test "decodeEntityInvalidHexFirstChar" {
-    try expectDecodeEntity("&#xGG00;", "&#xGG00;");
+    try expectDecodeEntity("#xGG00;", .{ 0, "" });
 }
 
 test "decodeEntityInvalidHex" {
-    try expectDecodeEntity("&#x3CG00;", "<G00;");
+    try expectDecodeEntity("#x3CG00;", .{ 4, "<" });
 }
 
 test "decodeEntityOverflowDecimal" {
@@ -320,30 +235,26 @@ test "decodeEntityOverflowDecimal" {
         "{u}",
         .{EntityDecoder.html_unicode_invalid},
     );
-    try expectDecodeEntity("&#4194304;", out_buf);
+    try expectDecodeEntity("#4194304;", .{ 9, out_buf });
 }
 
 test "decodeEntityKeywordNonexistent" {
-    try expectDecodeEntity("&abcde;", "&abcde;");
-}
-
-test "decodeEntityLong" {
-    try expectDecodeEntity("abc &amp;  def\t &lt;&gt;  ", "abc &  def\t <>  ");
+    try expectDecodeEntity("abcde;", .{ 0, "" });
 }
 
 test "decodeNamedEntityLong" {
     try expectDecodeEntity(
-        "&CounterClockwiseContourIntegralaaa;",
-        "&CounterClockwiseContourIntegralaaa;",
+        "CounterClockwiseContourIntegralaaa;",
+        .{ 0, "" },
     );
 }
 
 test "decodeLongestMatch" {
-    try expectDecodeEntity("abc&ampx ", "abc&x ");
+    try expectDecodeEntity("ampx ", .{ 3, "&" });
 }
 
 test "numericInvalidEnd" {
-    try expectDecodeEntity("&#60x", "<x");
+    try expectDecodeEntity("#60x", .{3, "<"});
 }
 
 pub const windows_1252_table = [_]u21{
