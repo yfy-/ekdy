@@ -294,6 +294,9 @@ pub fn TextExtractor(T: type) type {
         /// Preformatted text omits the first character if its '\n'.
         preformatted_first: bool = false,
 
+        /// State to return back after an attribute state.
+        attr_return_state: State = .tag_start_found,
+
         /// Parser state.
         state: State = .text,
 
@@ -637,6 +640,7 @@ pub fn TextExtractor(T: type) type {
                 return 1;
             }
 
+            self.attr_return_state = State.tag_start_found;
             self.state = State.attr_key;
             return 0;
         }
@@ -681,7 +685,14 @@ pub fn TextExtractor(T: type) type {
         //                        ^~
         fn handleTagEndFound(self: *Self, html: []const u8) Error!usize {
             const c = html[0];
-            if (c != '>') return 1;
+
+            if (ascii.isWhitespace(c)) return 1;
+
+            if (c != '>') {
+                self.attr_return_state = .tag_end_found;
+                self.state = .attr_key;
+                return 0;
+            }
 
             defer self.tag_buffer.clearRetainingCapacity();
             if (self.stack.getLastOrNull()) |tag| {
@@ -714,6 +725,11 @@ pub fn TextExtractor(T: type) type {
             return 1;
         }
 
+        fn switchAttrEndState(self: *Self) void {
+            self.state = self.attr_return_state;
+            self.attr_return_state = .tag_start_found;
+        }
+
         //<a href="http://...">ekdy</a>
         //   ^~~~
         fn handleAttrKey(self: *Self, html: []const u8) Error!usize {
@@ -724,7 +740,7 @@ pub fn TextExtractor(T: type) type {
             }
 
             if (c == '>') {
-                self.state = State.tag_start_found;
+                self.switchAttrEndState();
                 return 0;
             }
 
@@ -735,17 +751,16 @@ pub fn TextExtractor(T: type) type {
         //        ^~~~~~~~~~~~
         fn handleAttrVal(self: *Self, html: []const u8) Error!usize {
             const c = html[0];
-            self.state = State.attr_val;
             if (self.attr_val_quote) |qc| {
                 if (c == qc) {
-                    self.state = State.tag_start_found;
+                    self.switchAttrEndState();
                     self.attr_val_quote = null;
                     self.attr_val_start = false;
                 }
             } else {
                 if (ascii.isWhitespace(c)) {
                     if (self.attr_val_start) {
-                        self.state = State.tag_start_found;
+                        self.switchAttrEndState();
                         self.attr_val_start = false;
                     }
                 } else if (c == '"' or c == '\'') {
@@ -753,7 +768,7 @@ pub fn TextExtractor(T: type) type {
                     self.attr_val_start = true;
                 } else if (c == '>') {
                     self.attr_val_start = false;
-                    self.state = State.tag_start_found;
+                    self.switchAttrEndState();
                     return 0;
                 } else {
                     self.attr_val_start = true;
@@ -803,7 +818,7 @@ pub fn TextExtractor(T: type) type {
         // useful to avoid complex script sub-state machine, rather than
         // having a full sub-state machine this helper handles boilerplate
         // tag matching logic.
-        fn checkTagPrefixMatch(html: []const u8, tag_prefix: []const u8) usize {
+        fn checkTagPrefixMatch(self: *Self, html: []const u8, tag_prefix: []const u8) Error!usize {
             if (html.len < tag_prefix.len + 1)
                 return html.len;
 
@@ -811,12 +826,33 @@ pub fn TextExtractor(T: type) type {
                 return 0;
 
             var script_match = false;
-            for (html[tag_prefix.len..], 1..) |c, i| {
+            var sub_cursor = tag_prefix.len;
+            while (sub_cursor < html.len) {
+                const c = html[sub_cursor];
                 if (c == '>')
-                    return tag_prefix.len + i;
+                    return sub_cursor + 1;
 
-                if (!ascii.isWhitespace(c))
-                    if (!script_match) return tag_prefix.len;
+                if (!ascii.isWhitespace(c) and c != '/') {
+                    if (!script_match) return 0;
+
+                    // Some attribute is starting here. Save the
+                    // current state to attr_return_state so we don't
+                    // accidentally return to some weird state.
+                    self.attr_return_state = self.state;
+                    const orig_state = self.state;
+                    self.state = .attr_key;
+                    while (sub_cursor < html.len and self.state != orig_state) {
+                        sub_cursor += try switch (self.state) {
+                            .attr_key => self.handleAttrKey(html[sub_cursor..]),
+                            .attr_val => self.handleAttrVal(html[sub_cursor..]),
+                            else => {
+                                unreachable;
+                            },
+                        };
+                    }
+                } else {
+                    sub_cursor += 1;
+                }
 
                 script_match = true;
             }
@@ -841,7 +877,7 @@ pub fn TextExtractor(T: type) type {
         // FIXME: This part cannot be simply converted to SIMD.
         // for SIMD we need to first look for a '<' match.
         fn handleScript(self: *Self, html: []const u8) Error!usize {
-            const check_adv = checkTagPrefixMatch(html, "</script");
+            const check_adv = try self.checkTagPrefixMatch(html, "</script");
             if (check_adv > 0) {
                 self.endScript();
                 return check_adv;
@@ -868,13 +904,13 @@ pub fn TextExtractor(T: type) type {
                 return esc_end_tok.len;
             }
 
-            const start_adv = checkTagPrefixMatch(html, "<script");
+            const start_adv = try self.checkTagPrefixMatch(html, "<script");
             if (start_adv > 0) {
                 self.state = .script_double_escaped;
                 return start_adv;
             }
 
-            const end_adv = checkTagPrefixMatch(html, "</script");
+            const end_adv = try self.checkTagPrefixMatch(html, "</script");
             if (end_adv > 0) {
                 self.endScript();
                 return end_adv;
@@ -895,7 +931,7 @@ pub fn TextExtractor(T: type) type {
                 return esc_end_tok.len;
             }
 
-            const end_adv = checkTagPrefixMatch(html, "</script");
+            const end_adv = try self.checkTagPrefixMatch(html, "</script");
             if (end_adv > 0) {
                 self.state = .script_escaped;
                 return end_adv;
@@ -1035,6 +1071,10 @@ test "unmatching" {
         "12345",
         "<p>1<b>2<i>3</b>4</i>5</p>",
     );
+}
+
+test "tag_end_bogus_attribute" {
+    try expectConvert("abc", "<i>abc</i a=\">\">");
 }
 
 fn expectConvertFile(comptime file_base: []const u8) !void {
