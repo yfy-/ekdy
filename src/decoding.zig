@@ -233,7 +233,7 @@ test "decodeEntityOverflowDecimal" {
     const out_buf = try std.fmt.bufPrint(
         buf[0..],
         "{u}",
-        .{EntityDecoder.html_unicode_invalid},
+        .{html_unicode_invalid},
     );
     try expectDecodeEntity("#4194304;", .{ 9, out_buf });
 }

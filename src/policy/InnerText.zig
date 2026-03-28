@@ -50,12 +50,12 @@ const tag_start_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .nav = .double_break,
     .ol = .double_break,
     .p = .double_break,
-    .pre = .double_break,
     .search = .double_break,
     .section = .double_break,
     .ul = .single_break,
     .tr = .single_break,
     .td = .single_break,
+    .pre = .single_break,
 });
 
 const tag_end_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
@@ -103,12 +103,11 @@ const tag_end_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .nav = .double_break,
     .ol = .double_break,
     .p = .double_break,
-    .pre = .double_break,
     .search = .double_break,
     .section = .double_break,
     .ul = .single_break,
     .table = .single_break,
-    .mi = .single_break,
+    .pre = .single_break,
 });
 
 // Tag properties is an array of tuples where each tuple is a tag and
@@ -130,8 +129,12 @@ pub fn onTagStart(self: *Self, tag: html.Tag, writer: *std.io.Writer) !?html.Whi
     return tag_start_whitespaces.get(tag);
 }
 
-pub fn onTagEnd(self: *Self, tag: html.Tag, writer: *std.io.Writer) !?html.Whitespace {
+pub fn onTagEnd(
+    self: *Self,
+    end_tag: html.Tag,
+    writer: *std.io.Writer,
+) !?html.Whitespace {
     _ = self;
     _ = writer;
-    return tag_end_whitespaces.get(tag);
+    return tag_end_whitespaces.get(end_tag);
 }

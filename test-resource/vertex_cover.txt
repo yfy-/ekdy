@@ -1,21 +1,16 @@
-Vertex cover - Wikipedia
-
 Jump to content
 
 Main menu
 Main menu
 move to sidebar hide
 Navigation
-
 Main page
 Contents
 Current events
 Random article
 About Wikipedia
 Contact us
-
 Contribute
-
 Help
 Learn to edit
 Community portal
@@ -30,61 +25,39 @@ Appearance
 Donate
 Create account
 Log in
-
 Personal tools
-
 Donate
 Create account
 Log in
-
 Pages for logged out editors learn more
-
 Contributions
 Talk
 
 Contents
-
 move to sidebar hide
-
 (Top)
 1 Definition
 Toggle Definition subsection
-
 1.1 Examples
-
 1.2 Properties
-
 2 Computational problem
 Toggle Computational problem subsection
-
 2.1 ILP formulation
-
 2.2 Exact evaluation
-
 2.2.1 Fixed-parameter tractability
-
 2.3 Approximate evaluation
-
 2.3.1 Inapproximability
-
 2.3.2 Pseudocode
-
 3 Applications
-
 4 See also
-
 5 Notes
-
 6 References
-
 7 External links
 
 Toggle the table of contents
 
 Vertex cover
-
 13 languages
-
 العربية
 Čeština
 Deutsch
@@ -98,12 +71,10 @@ Polski
 Português
 Русский
 Українська
-
 Edit links
 
 Article
 Talk
-
 English
 
 Read
@@ -114,13 +85,10 @@ Tools
 Tools
 move to sidebar hide
 Actions
-
 Read
 Edit
 View history
-
 General
-
 What links here
 Related changes
 Upload file
@@ -130,14 +98,10 @@ Page information
 Cite this page
 Get shortened URL
 Download QR code
-
 Print/export
-
 Download as PDF
 Printable version
-
 In other projects
-
 Wikidata item
 
 Appearance
@@ -157,7 +121,6 @@ The minimum vertex cover problem can be formulated as a half-integral, linear pr
 Vertex cover problems have been generalized to hypergraphs, see Vertex cover in hypergraphs.
 
 Covering/packing-problem pairs
-
 Covering problems
 Packing problems
 Minimum set cover
@@ -170,13 +133,10 @@ Bin covering
 Bin packing
 Polygon covering
 Rectangle packing
-
 v
 t
 e
-
 Definition
-
 [edit]
 
 Examples of vertex covers
@@ -188,22 +148,15 @@ Formally, a vertex cover V ′ of an undirected graph G = ( V , E ) is a subset 
 A minimum vertex cover is a vertex cover of smallest possible size. The vertex cover number τ is the size of a minimum vertex cover, i.e. τ = | V ′ | . The lower figure shows examples of minimum vertex covers in the previous graphs.
 
 Examples
-
 [edit]
-
 The set of all vertices is a vertex cover.
 The endpoints of any maximal matching form a vertex cover.
 The complete bipartite graph K m , n has a minimum vertex cover of size τ ( K m , n ) = min { m , n } .
-
 Properties
-
 [edit]
-
 A set of vertices is a vertex cover if and only if its complement is an independent set.
 Consequently, the number of vertices of a graph is equal to its minimum vertex cover number plus the size of a maximum independent set.[1]
-
 Computational problem
-
 [edit]
 
 The minimum vertex cover problem is the optimization problem of finding a smallest vertex cover in a given graph.
@@ -219,7 +172,6 @@ QUESTION: Does G have a vertex cover of size at most k ?
 The vertex cover problem is an NP-complete problem: it was one of Karp's 21 NP-complete problems. It is often used in computational complexity theory as a starting point for NP-hardness proofs.
 
 ILP formulation
-
 [edit]
 
 Assume that every vertex has an associated cost of c ( v ) ≥ 0 . The (weighted) minimum vertex cover problem can be formulated as the following integer linear program (ILP).[2]
@@ -239,7 +191,6 @@ for all v ∈ V .
 This ILP belongs to the more general class of ILPs for covering problems. The integrality gap of this ILP is 2 , so its relaxation (allowing each variable to be in the interval from 0 to 1, rather than requiring the variables to be only 0 or 1) gives a factor- 2 approximation algorithm for the minimum vertex cover problem. Furthermore, the linear programming relaxation of that ILP is half-integral, that is, there exists an optimal solution for which each entry x v is either 0, 1/2, or 1. A 2-approximate vertex cover can be obtained from this fractional solution by selecting the subset of vertices whose variables are nonzero.
 
 Exact evaluation
-
 [edit]
 
 The decision variant of the vertex cover problem is NP-complete, which means it is unlikely that there is an efficient algorithm to solve it exactly for arbitrary graphs. NP-completeness can be proven by reduction from 3-satisfiability or, as Karp did, by reduction from the clique problem. Vertex cover remains NP-complete even in cubic graphs[3] and even in planar graphs of degree at most 3.[4]
@@ -249,7 +200,6 @@ For bipartite graphs, the equivalence between vertex cover and maximum matching 
 For tree graphs, an algorithm finds a minimal vertex cover in polynomial time by finding the first leaf in the tree and adding its parent to the minimal vertex cover, then deleting the leaf and parent and all associated edges and continuing repeatedly until no edges remain in the tree.
 
 Fixed-parameter tractability
-
 [edit]
 
 An exhaustive search algorithm can solve the problem in time 2knO(1), where k is the size of the vertex cover. Vertex cover is therefore fixed-parameter tractable, and if we are only interested in small k, we can solve the problem in polynomial time. One algorithmic technique that works here is called bounded search tree algorithm, and its idea is to repeatedly choose some vertex and recursively branch, with two cases at each step: place either the current vertex or all its neighbours into the vertex cover. The algorithm for solving vertex cover that achieves the best asymptotic dependence on the parameter runs in time O ( 1.2738 k + ( k ⋅ n ) ) .[5] The klam value of this time bound (an estimate for the largest parameter value that could be solved in a reasonable amount of time) is approximately 190. That is, unless additional algorithmic improvements can be found, this algorithm is suitable only for instances whose vertex cover number is 190 or less. Under reasonable complexity-theoretic assumptions, namely the exponential time hypothesis, the running time cannot be improved to 2o(k), even when n is O ( k ) .
@@ -257,7 +207,6 @@ An exhaustive search algorithm can solve the problem in time 2knO(1), where k is
 However, for planar graphs, and more generally, for graphs excluding some fixed graph as a minor, a vertex cover of size k can be found in time 2 O ( k ) n O ( 1 ) , i.e., the problem is subexponential fixed-parameter tractable.[6] This algorithm is again optimal, in the sense that, under the exponential time hypothesis, no algorithm can solve vertex cover on planar graphs in time 2 o ( k ) n O ( 1 ) .[7]
 
 Approximate evaluation
-
 [edit]
 
 One can find a factor-2 approximation by repeatedly taking both endpoints of an edge into the vertex cover, then removing them from the graph. Put otherwise, we find a maximal matching M with a greedy algorithm and construct a vertex cover C that consists of all endpoints of the edges in M. In the following figure, a maximal matching M is marked with red, and the vertex cover C is marked with blue.
@@ -269,7 +218,6 @@ This simple algorithm was discovered independently by Fanica Gavril and Mihalis 
 More involved techniques show that there are approximation algorithms with a slightly better approximation factor. For example, an approximation algorithm with an approximation factor of 2 − Θ ( 1 / log ⁡ | V | ) is known.[9] The problem can be approximated with an approximation factor 2 / ( 1 + δ ) in δ - dense graphs.[10]
 
 Inapproximability
-
 [edit]
 
 No better constant-factor approximation algorithm than the above one is known. The minimum vertex cover problem is APX-complete, that is, it cannot be approximated arbitrarily well unless P = NP. Using techniques from the PCP theorem, Dinur and Safra proved in 2005 that minimum vertex cover cannot be approximated within a factor of 1.3606 for any sufficiently large vertex degree unless P = NP.[11] Later, the factor was improved to 2 − ϵ for any ϵ > 0 .[12] Moreover, if the unique games conjecture is true then minimum vertex cover cannot be approximated within any constant factor better than 2.[13]
@@ -277,9 +225,7 @@ No better constant-factor approximation algorithm than the above one is known. T
 Although finding the minimum-size vertex cover is equivalent to finding the maximum-size independent set, as described above, the two problems are not equivalent in an approximation-preserving way: The Independent Set problem has no constant-factor approximation unless P = NP.
 
 Pseudocode
-
 [edit]
-
 APPROXIMATION-VERTEX-COVER(G)
 C = ∅
 E'= G.E
@@ -295,19 +241,14 @@ return C
 [14] [15]
 
 Applications
-
 [edit]
 
 Vertex cover optimization serves as a model for many real-world and theoretical problems. For example, a commercial establishment interested in installing the fewest possible closed circuit cameras covering all hallways (edges) connecting all rooms (nodes) on a floor might model the objective as a vertex cover minimization problem. The problem has also been used to model the elimination of repetitive DNA sequences for synthetic biology and metabolic engineering applications.[16][17]
 
 See also
-
 [edit]
-
 Dominating set
-
 Notes
-
 [edit]
 
 ^ Gallai 1959.
@@ -329,9 +270,7 @@ Notes
 ^ Reis, Alexander C.; Halper, Sean M.; Vezeau, Grace E.; Cetnar, Daniel P.; Hossain, Ayaan; Clauer, Phillip R.; Salis, Howard M. (November 2019). "Simultaneous repression of multiple bacterial genes using nonrepetitive extra-long sgRNA arrays". Nature Biotechnology. 37 (11): 1294–1301. doi:10.1038/s41587-019-0286-9. ISSN 1546-1696. OSTI 1569832. PMID 31591552. S2CID 203852115.
 
 References
-
 [edit]
-
 Chen, Jianer; Kanj, Iyad A.; Xia, Ge (2006). "Improved Parameterized Upper Bounds for Vertex Cover". Mathematical Foundations of Computer Science 2006: 31st International Symposium, MFCS 2006, Stará Lesná, Slovakia, August 28-September 1, 2006, Proceedings (PDF). Lecture Notes in Computer Science. Vol. 4162. Springer-Verlag. pp. 238–249. doi:10.1007/11821069_21. ISBN 978-3-540-37791-7.
 Cormen, Thomas H.; Leiserson, Charles E.; Rivest, Ronald L.; Stein, Clifford (2001). Introduction to Algorithms. Cambridge, Mass.: MIT Press and McGraw-Hill. pp. 1024–1027. ISBN 0-262-03293-7.
 Demaine, Erik; Fomin, Fedor V.; Hajiaghayi, Mohammad Taghi; Thilikos, Dimitrios M. (2005). "Subexponential parameterized algorithms on bounded-genus graphs and H-minor-free graphs". Journal of the ACM. 52 (6): 866–893. doi:10.1145/1101821.1101823. S2CID 6238832. Retrieved 2010-03-05.
@@ -349,33 +288,25 @@ Khot, Subhash; Minzer, Dor; Safra, Muli (2018). "Pseudorandom Sets in Grassmann 
 Khot, Subhash; Regev, Oded (2008). "Vertex cover might be hard to approximate to within 2−ε". Journal of Computer and System Sciences. 74 (3): 335–349. doi:10.1016/j.jcss.2007.06.019.
 Papadimitriou, Christos H.; Steiglitz, Kenneth (1998). Combinatorial Optimization: Algorithms and Complexity. Dover.
 Vazirani, Vijay V. (2003). Approximation Algorithms. Springer-Verlag. ISBN 978-3-662-04565-7.
-
 External links
-
 [edit]
 Wikimedia Commons has media related to Vertex cover problem.
-
 Weisstein, Eric W. "Vertex Cover". MathWorld.
 Weisstein, Eric W. "Minimum Vertex Cover". MathWorld.
 Weisstein, Eric W. "Vertex Cover Number". MathWorld.
 River Crossings (and Alcuin Numbers) – Numberphile
-
 Retrieved from "https://en.wikipedia.org/w/index.php?title=Vertex_cover&oldid=1272058722"
 Categories:
-
 Computational problems in graph theory
 NP-complete problems
 Covering problems
-
 Hidden categories:
-
 Articles with short description
 Short description is different from Wikidata
 Commons category link is locally defined
 
 This page was last edited on 27 January 2025, at 00:16 (UTC).
 Text is available under the Creative Commons Attribution-ShareAlike 4.0 License; additional terms may apply. By using this site, you agree to the Terms of Use and Privacy Policy. Wikipedia® is a registered trademark of the Wikimedia Foundation, Inc., a non-profit organization.
-
 Privacy policy
 About Wikipedia
 Disclaimers
@@ -385,7 +316,6 @@ Developers
 Statistics
 Cookie statement
 Mobile view
-
 Search
 Search
 

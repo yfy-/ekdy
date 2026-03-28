@@ -1,11 +1,6 @@
-HTML syntax - HTML5
-
 jump
-
 HTML: The Markup Language Reference
-
 « documents elements by function »
-
 4. HTML syntax # T
 
 This section describes the HTML syntax in detail. In places, it also notes differences between the the HTML syntax and the XML syntax, but it does not describe the XML syntax in detail (the XML syntax is instead defined by rules in the [XML] specification and in the [Namespaces in XML] specification).
@@ -21,7 +16,6 @@ This section is divided into the following parts:
 7.  Comments
 8.  SVG and MathML elements in HTML documents
 9.  CDATA sections in SVG and MathML contents
-
 4.1. The doctype # T
 
 A doctype (sometimes capitalized as “DOCTYPE”) is an special instruction which, for legacy reasons that have to do with processing modes in browsers, is a required part of any document in the HTML syntax; it must match the characteristics of one of the following three formats:
@@ -89,7 +83,6 @@ A ">" character.
 The following is examples of a conformant legacy-tool-compatible doctype.
 
 <!doctype HTML system "about:legacy-compat">
-
 4.2. Character encoding declaration # T
 
 A character encoding declaration is a mechanism for specifying the character encoding used to store or transmit a document.
@@ -152,7 +145,6 @@ Void elements only have a start tag; end tags must not be specified for void ele
 The start and end tags of certain elements can be omitted. The subsection for each element in the HTML elements section of this reference provides information about which tags (if any) can be omitted for that particular element.
 A non-void element must have an end tag, unless the subsection for that element in the HTML elements section of this reference indicates that its end tag can be omitted.
 The contents of an element must be placed between just after its start tag (which might be implied, in certain cases) and just before its end tag (which might be implied in certain cases).
-
 4.3.1. Misnested tags #
 
 If an element has both a start tag and an end tag, its end tag must be contained within the contents of the same element in which its start tag is contained. An end tag that is not contained within the same contents as its start tag is said to be a misnested tag.
@@ -160,7 +152,6 @@ If an element has both a start tag and an end tag, its end tag must be contained
 In the following example, the "</i>" end tag is a misnested tag, because it is not contained within the contents of the b element that contains its corresponding "<i>" start tag.
 
 <b>foo <i>bar</b> baz</i>
-
 4.4. Attributes # T
 
 attributes for an element are expressed inside the element’s start tag. Attributes have a name and a value.
@@ -187,7 +178,6 @@ Certain attributes may be specified by providing just the attribute name, with n
 In the following example, the disabled attribute is given with the empty attribute syntax:
 
 <input disabled>
-
 unquoted attribute-value syntax
 
 An unquoted attribute value is specified by providing the following parts in exactly the following order:
@@ -229,7 +219,6 @@ must not contain any literal "'" characters
 In the following example, the type attribute is given with the single-quoted attribute value syntax:
 
 <input type='checkbox'>
-
 double-quoted attribute-value syntax
 
 A double-quoted attribute value is specified by providing the following parts in exactly the following order:
@@ -274,7 +263,6 @@ character references
 Normal character data has the following restrictions:
 
 must not contain any "<" characters
-
 replaceable character data
 
 In documents in the HTML syntax, the title and textarea elements can contain replaceable character data. Replaceable character data can contain the following:
@@ -324,7 +312,6 @@ For further information about named character references, see [XML Entities].
 The following is an example of a named character reference for the character "†" (U+2020 DAGGER).
 
 &dagger;
-
 decimal numeric character reference
 
 Decimal numerical character references consist of the following parts, in exactly the following order.
@@ -337,7 +324,6 @@ A ";" character.
 The following is an example of a decimal numeric character reference for the character "†" (U+2020 DAGGER).
 
 &#8224;
-
 hexadecimal numeric character reference
 
 Hexadecimal numeric character references consist of the following parts, in exactly the following order.
@@ -374,7 +360,6 @@ must not end with a "-" character
 The following is an example of a comment.
 
 <!-- main content starts here -->
-
 4.8. SVG and MathML elements in HTML documents # T
 
 SVG and MathML elements are elements from the SVG and MathML namespaces. SVG and MathML elements can be used both in documents in the HTML syntax and in documents in the XML syntax. Syntax rules for SVG and MathML elements in documents in the XML syntax are defined in the XML specification [XML]. The following list describes additional syntax rules that specifically apply to SVG and MathML elements in documents in the HTML syntax.
@@ -383,7 +368,6 @@ SVG and MathML elements whose start tags have a single "/" character before the 
 SVG and MathML elements must either have a start tag and an end tag, or a start tag that is marked as self-closing, in which case they must not have an end tag.
 SVG and MathML elements whose start tag is marked as self-closing, can’t have any contents.
 The contents of an SVG or MathML element whose start tag is not marked as self-closing are any elements, character data, comments, and CDATA sections that it contains, with the restriction that any character data it contains must be normal character data.
-
 4.9. CDATA sections in SVG and MathML contents # T
 
 CDATA sections in SVG and MathML contents in documents in the HTML syntax consist of the following parts, in exactly the following order:
@@ -396,7 +380,6 @@ CDATA sections are allowed only in the contents of elements from the SVG and Mat
 
 The following shows an example of a CDATA section.
 
-
 <annotation encoding="text/latex">
   <![CDATA[\documentclass{article}
   \begin{document}
@@ -405,5 +388,4 @@ The following shows an example of a CDATA section.
   The base of the natural logarithms, approximately 2.71828.
   \end{document}]]>
 </annotation>
-
 « documents elements by function »

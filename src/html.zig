@@ -376,6 +376,7 @@ pub fn TextExtractor(T: type) type {
         ) !void {
             while (self.cursor < html.len) {
                 const curr_html = html[self.cursor..];
+                // std.debug.print("state: {} char: {c}\n", .{ self.state, curr_html[0] });
                 self.cursor += try switch (self.state) {
                     .text => self.handleText(allocator, curr_html),
                     .tag => self.handleTag(curr_html),
@@ -579,6 +580,12 @@ pub fn TextExtractor(T: type) type {
                     tag = .unknown;
                 }
 
+                // br is forced line break..
+                if (tag == .br) {
+                    try self.out_writer.writeByte('\n');
+                    self.last_br = true;
+                }
+
                 try self.stack.append(allocator, tag);
                 if (tag_properties.get(tag).is_ignore)
                     self.ignore_depth += 1;
@@ -610,12 +617,6 @@ pub fn TextExtractor(T: type) type {
         //       ^~
         fn handleTagStartFound(self: *Self, html: []const u8) Error!usize {
             const tag = self.stack.getLast();
-
-            // br is forced line break..
-            if (tag == .br) {
-                try self.out_writer.writeByte('\n');
-                self.last_br = true;
-            }
 
             if (@hasDecl(T, "onTagStart")) {
                 if (try self.policy.onTagStart(tag, self.out_writer)) |ws| {
@@ -812,17 +813,23 @@ pub fn TextExtractor(T: type) type {
 
         // Check if given tag prefix is proper tag. For example if
         // '</script' is given will try to match a proper </script> tag by
-        // relying to the rules of tag matching (whitespace etc.). If
+        // relying to the rules of script tag matching (whitespace etc.). If
         // there is no match will return 0, otherwise will return number
         // of bytes that points after the tag match. This function is
         // useful to avoid complex script sub-state machine, rather than
         // having a full sub-state machine this helper handles boilerplate
         // tag matching logic.
-        fn checkTagPrefixMatch(self: *Self, html: []const u8, tag_prefix: []const u8) Error!usize {
+        fn tagMatchScriptMode(
+            self: *Self,
+            html: []const u8,
+            comptime tag_prefix: []const u8,
+        ) Error!usize {
             if (html.len < tag_prefix.len + 1)
                 return html.len;
 
-            if (!std.mem.eql(u8, html[0..tag_prefix.len], tag_prefix))
+            var lowercase_buf: [tag_prefix.len]u8 = undefined;
+            const lowercase = ascii.lowerString(&lowercase_buf, html[0..tag_prefix.len]);
+            if (!std.mem.eql(u8, lowercase, tag_prefix))
                 return 0;
 
             var script_match = false;
@@ -852,9 +859,13 @@ pub fn TextExtractor(T: type) type {
                     }
                 } else {
                     sub_cursor += 1;
-                }
+                    // In below states the final > is not required for tag start or end.
+                    // Simply either ascii whitespace or / can end the tag.
+                    if (self.state == .script_escaped or self.state == .script_double_escaped)
+                        return sub_cursor;
 
-                script_match = true;
+                    script_match = true;
+                }
             }
 
             // Consumed everything
@@ -877,7 +888,7 @@ pub fn TextExtractor(T: type) type {
         // FIXME: This part cannot be simply converted to SIMD.
         // for SIMD we need to first look for a '<' match.
         fn handleScript(self: *Self, html: []const u8) Error!usize {
-            const check_adv = try self.checkTagPrefixMatch(html, "</script");
+            const check_adv = try self.tagMatchScriptMode(html, "</script");
             if (check_adv > 0) {
                 self.endScript();
                 return check_adv;
@@ -904,13 +915,13 @@ pub fn TextExtractor(T: type) type {
                 return esc_end_tok.len;
             }
 
-            const start_adv = try self.checkTagPrefixMatch(html, "<script");
+            const start_adv = try self.tagMatchScriptMode(html, "<script");
             if (start_adv > 0) {
                 self.state = .script_double_escaped;
                 return start_adv;
             }
 
-            const end_adv = try self.checkTagPrefixMatch(html, "</script");
+            const end_adv = try self.tagMatchScriptMode(html, "</script");
             if (end_adv > 0) {
                 self.endScript();
                 return end_adv;
@@ -931,7 +942,7 @@ pub fn TextExtractor(T: type) type {
                 return esc_end_tok.len;
             }
 
-            const end_adv = try self.checkTagPrefixMatch(html, "</script");
+            const end_adv = try self.tagMatchScriptMode(html, "</script");
             if (end_adv > 0) {
                 self.state = .script_escaped;
                 return end_adv;
@@ -1035,7 +1046,7 @@ test "void_tags_with_br" {
         \\</body>
         \\</html>
     ;
-    const exp = "Simple HTML Example\n\nWelcome\n\nThis paragraph contains an " ++
+    const exp = "Welcome\n\nThis paragraph contains an " ++
         "image:\n\nHere is a line break after this sentence:\nAnd here is the " ++
         "next line.\n\nEnter your name:";
     try expectConvert(exp, html);
@@ -1062,7 +1073,7 @@ test "ignore_tags_comment" {
         \\</body>
         \\</html>
     ;
-    const exp = "Short < >\n\nHi! ¨";
+    const exp = "Hi! ¨";
     try expectConvert(exp, html);
 }
 
@@ -1244,11 +1255,7 @@ test "html5lib_tests2" {
 }
 
 test "html5lib_tests3" {
-    // 4-7 and 11: <pre> tags omit only the first whitespace character.
-    try expectHTML5(
-        "tests3.ekdytest",
-        &.{},
-    );
+    try expectHTML5("tests3.ekdytest", &.{});
 }
 
 test "html5lib_tests4" {
@@ -1279,15 +1286,20 @@ test "html5lib_tests8" {
 }
 
 test "html5lib_tests9" {
-    // 8: Math parsing.
-    // 17-18: Cursed case of both <select> and <table>.
+    // All: <math> <select> and <table>
     try expectHTML5("tests9.ekdytest", &.{
-        .{ 17, "foo\nbar\n\nbaz\n\nquux" }, .{ 18, "foo\nbar\n\nbaz\n\nquux" },
+        .{ 8, "foobar" },                 .{ 9, "foobar" },
+        .{ 10, "foobar" },                .{ 11, "foobar" },
+        .{ 12, "foobar\n\nbaz" },         .{ 13, "foobar\n\nbaz" },
+        .{ 14, "foobar\n\nbaz\n\nquux" }, .{ 15, "foobar\n\nquux" },
+        .{ 16, "foobar\n\nbaz\n\nquux" }, .{ 17, "foobar\n\nbaz\n\nquux" },
+        .{ 18, "foobar\n\nbaz\n\nquux" }, .{ 19, "foobar\n\nbaz" },
+        .{ 20, "foobar\n\nbaz" },
     });
 }
 
 test "html5lib_tests10" {
-    // 13, 15, 18-19, 30: SVG parsing.
+    // 13, 15, 18-19, 30-31: SVG parsing.
     try expectHTML5("tests10.ekdytest", &.{
         .{ 13, "quux" }, .{ 15, "quux" }, .{ 18, "" }, .{ 19, "" }, .{ 30, "a" }, .{ 31, "a" },
     });
@@ -1384,7 +1396,7 @@ test "html5lib_adoption02" {
 test "html5lib_blocks" {
     // 10-13: <details>, <dialog> handling requires attribute
     // buffering for open attribute.
-    // 16-17, 20-23, 26-29, 32-35, 44-47: Auto inserted </p>.
+    // 16-17, 20-23, 26-29, 32-35, 40-41, 44-47: Auto inserted </p>.
     try expectHTML5("blocks.ekdytest", &.{
         .{ 10, "foo\n\nbar\n\nbaz" }, .{ 11, "foo\n\nbar" },      .{ 12, "foo\n\nbar\n\nbaz" },
         .{ 13, "foo\n\nbar" },        .{ 16, "foo\nbar\n\nbaz" }, .{ 17, "foo\nbar" },
@@ -1392,8 +1404,8 @@ test "html5lib_blocks" {
         .{ 23, "foo\nbar" },          .{ 26, "foo\nbar\n\nbaz" }, .{ 27, "foo\nbar" },
         .{ 28, "foo\nbar\n\nbaz" },   .{ 29, "foo\nbar" },        .{ 32, "foobar\n\nbaz" },
         .{ 33, "foobar" },            .{ 34, "foo\nbar\n\nbaz" }, .{ 35, "foo\nbar" },
-        .{ 44, "foo\nbar\n\nbaz" },   .{ 45, "foo\nbar" },        .{ 46, "foo\nbar\n\nbaz" },
-        .{ 47, "foo\nbar" },
+        .{ 40, "foo\nbar\n\nbaz" },   .{ 41, "foo\nbar" },        .{ 44, "foo\nbar\n\nbaz" },
+        .{ 45, "foo\nbar" },          .{ 46, "foo\nbar\n\nbaz" }, .{ 47, "foo\nbar" },
     });
 }
 
@@ -1478,4 +1490,70 @@ test "html5lib_ruby" {
 
 test "html5lib_scriptdata01" {
     try expectHTML5("scriptdata01.ekdytest", &.{});
+}
+
+test "html5lib_search-element" {
+    try expectHTML5("search-element.ekdytest", &.{});
+}
+
+test "html5lib_svg" {
+    try expectHTML5("svg.ekdytest", &.{});
+}
+
+test "html5lib_tables01" {
+    // 15: <table> tab handling.
+    try expectHTML5("tables01.ekdytest", &.{ .{ 15, "" }, .{ 16, "" } });
+}
+
+test "html5lib_template" {
+    // 6, 78: <template> parsing.
+    try expectHTML5("template.ekdytest", &.{ .{ 6, "Hello" }, .{ 78, "Foo" } });
+}
+
+test "html5lib_tests_innerHTML_1" {
+    // 73: <table> tab handling.
+    try expectHTML5("tests_innerHTML_1.ekdytest", &.{.{ 73, "" }});
+}
+
+test "html5lib_tricky01" {
+    const deviation =
+        \\Italic and Red
+        \\
+        \\Italic and Red Just italic. Italic only. Plain
+        \\
+        \\I should not be red. Red. Italic and red.
+        \\
+        \\Italic and red. Red. I should not be red.
+        \\
+        \\Bold Bold and italic Only Italic Plain
+    ;
+
+    // 0-1: Automatic <p> insertion.
+    // 7: <table> parsing somehow allows initial whitespace without any text.
+    try expectHTML5("tricky01.ekdytest", &.{
+        .{ 0, "Bold Not bold Also not bold." },                              .{ 1, deviation },
+        .{ 7, "This page contains an insanely badly-nested tag sequence." },
+    });
+}
+
+test "html5lib_webkit01" {
+    // 18, 20: <br> prints nothing if there is no text at all. But if
+    // there is at least 1 text char all <br> is written. This
+    // requires bufferin so we omit this.
+    // 31: Weird <option> and <select> spacing.
+    // 47: <table> tab spacing.
+    // 49: MathML parsing, uses unicode symbols.
+    try expectHTML5("webkit01.ekdytest", &.{
+        .{ 18, "\n" }, .{ 20, "\n" }, .{ 31, "A\nB\nC\nD\nE\nF\nG" }, .{ 47, "" }, .{ 49, "1a" },
+    });
+}
+
+test "html5lib_webkit02" {
+    // 19: <svg> parsing.
+    // 20: <svg> parsing does not recognize <title> tag inside.
+    // 37-38: <select> and <option> parsing.
+    try expectHTML5("webkit02.ekdytest", &.{
+        .{ 19, "</foreignObject></svg><div>bar</div>" }, .{ 20, "" },
+        .{ 37, "div 1\nbutton\ndiv 2\ndiv 3" },          .{ 38, "button" },
+    });
 }

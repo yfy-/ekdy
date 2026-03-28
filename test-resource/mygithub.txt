@@ -1,7 +1,4 @@
-yfy-/cosmo-crawler: A web crawler in Zig.
-
 Skip to content
-
 Navigation Menu
 
 Global navigation
@@ -25,7 +22,6 @@ About Blog Terms Privacy Security Status
 yfy-  / cosmo-crawler
 
 Navigate back to
-
 yfy-
 cosmo-crawler
 
@@ -33,12 +29,9 @@ yfy- /
 cosmo-crawler
 
 Type / to search
-
 Search code, repositories, users, issues, pull requests...
-
 Search
 Clear
-
 Search syntax tips
 Give feedback
 
@@ -50,9 +43,7 @@ Include my email address so I can be contacted
 Cancel Submit feedback
 
 Saved searches
-
 Use saved searches to filter your results more quickly
-
 Name
 Query
 
@@ -74,9 +65,7 @@ Wiki
 Security
 Insights
 Settings
-
 Additional navigation options
-
 Code
 Issues
 Pull requests
@@ -90,7 +79,6 @@ Settings
 You signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or window. Reload to refresh your session. Dismiss alert
 
 cosmo-crawler Public
-
 Unpin
 Watch
 
@@ -105,13 +93,11 @@ Loading
 Starred 1
 
 Lists
-
 Loading
 
 Star 1
 
 Lists
-
 Loading
 
 Fork your own copy of yfy-/cosmo-crawler
@@ -121,40 +107,26 @@ Star this repository
 A web crawler in Zig.
 
 License
-
 GPL-3.0 license
-
 1 star 0 forks 1 watching Branches Tags Activity
-
 Public repository
 Open in github.dev Open in a new github.dev tab Open in codespace
-
 yfy-/cosmo-crawler
-
  main
 BranchesTags
 Go to file
-
 Add file
-
 Add file
-
 Add file
 Code
-
 Folders and files
-
 Name
 Name
 Last commit message
 Last commit date
-
 Latest commit
-
  
-
 History
-
 8 Commits
 .gitignore
 .gitignore
@@ -185,9 +157,7 @@ html_strip.zig
  
  
 View all files
-
 Drop to upload your files
-
 Repository files navigation
 
 README
@@ -198,21 +168,16 @@ Cosmo Crawler
 Currently this is only an HTML stripping tool. It removes HTML tags and other boilerplate to extract human readable content. But plan is to make it a web crawler.
 
 Build
-
 # An optimized build
 zig build -Doptimize=ReleaseFast
-
 Usage
-
 # Stripped content will be in stdout
 zig-out/bin/crawler <your_file>.html
 
 Edit repository details
-
 Description
 Website
 Topics (separate with spaces)
-
 Include in the home page
 Releases Packages Deployments
 Save changes Cancel
@@ -222,46 +187,29 @@ About
 A web crawler in Zig.
 
 Resources
-
 Readme
-
 License
-
 GPL-3.0 license
 Activity
-
 Stars
-
 1 star
-
 Watchers
-
 1 watching
-
 Forks
-
 0 forks
-
 Releases
-
 No releases published
 Create a new release
-
 Packages 0
-
 No packages published
  Publish your first package
-
 Languages
-
 Zig 100.0%
 
 Footer
-
 © 2025 GitHub, Inc.
 
 Footer navigation
-
 Terms
 Privacy
 Security
