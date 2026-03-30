@@ -19,15 +19,32 @@
               zig
               zls
               git
+              (python3.withPackages (ps: with ps; [
+                python-lsp-server
+              ]))
             ]
             ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               (python3.withPackages (ps: with ps; [
                 websocket-client
-                python-lsp-server
               ]))
               chromium
               parallel
             ];
+
+          shellHook = ''
+            export VENV_DIR="$PWD/.venv"
+
+            if [ ! -d "$VENV_DIR" ]; then
+              python -m venv "$VENV_DIR"
+            fi
+
+            source "$VENV_DIR/bin/activate"
+
+            if ! python -c "import resiliparse" >/dev/null 2>&1; then
+              python -m pip install --upgrade pip wheel setuptools
+
+            fi
+          '';
         };
       }
     );
