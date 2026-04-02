@@ -16,7 +16,10 @@ const usage =
     \\
 ;
 
-fn load_docs(allocator: std.mem.Allocator, htmlbin_path: []const u8) !struct { [][]const u8, usize } {
+fn load_docs(
+    allocator: std.mem.Allocator,
+    htmlbin_path: []const u8,
+) !struct { [][]const u8, usize } {
     const htmlbin_file = try std.fs.cwd().openFile(htmlbin_path, .{});
     defer htmlbin_file.close();
 

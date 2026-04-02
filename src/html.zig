@@ -424,12 +424,6 @@ pub fn TextExtractor(T: type) type {
             const tag = self.stack.getLastOrNull();
             const tag_prop = if (tag) |t| tag_properties.get(t) else null;
 
-            // Script is special.
-            if (tag != null and tag.? == .script) {
-                self.state = .script;
-                return 0;
-            }
-
             const c = html[0];
             if (c == '<') {
                 if (tag == null or (!tag_prop.?.is_rawtext and !tag_prop.?.is_rcdata)) {
@@ -637,7 +631,7 @@ pub fn TextExtractor(T: type) type {
                     return 0;
                 }
 
-                self.state = State.text;
+		self.state = if (tag == .script) State.script else State.text;
                 return 1;
             }
 
