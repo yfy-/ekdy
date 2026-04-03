@@ -424,39 +424,112 @@ pub fn TextExtractor(T: type) type {
             const tag = self.stack.getLastOrNull();
             const tag_prop = if (tag) |t| tag_properties.get(t) else null;
 
-            const c = html[0];
-            if (c == '<') {
-                if (tag == null or (!tag_prop.?.is_rawtext and !tag_prop.?.is_rcdata)) {
-                    self.state = State.tag;
-                    return 1;
-                }
-
-                const tag_str = @tagName(tag.?);
-                const tag_end_size = tag_str.len + 2;
-                if (html.len >= tag_end_size and html[1] == '/') {
-                    const case_ins_tag = try std.ascii.allocLowerString(
-                        allocator,
-                        html[2..tag_end_size],
-                    );
-                    defer allocator.free(case_ins_tag);
-                    if (tag.? == tag_from_str(case_ins_tag)) {
-                        try self.tag_buffer.appendSlice(allocator, tag_str);
-                        self.state = State.tag_end_found;
-                        return tag_end_size;
+            var start: usize = 0;
+            var consumed: usize = 0;
+            while (consumed < html.len) : (consumed += 1) {
+                const c = html[consumed];
+                if (c == '<') {
+                    if (tag == null or (!tag_prop.?.is_rawtext and !tag_prop.?.is_rcdata)) {
+                        try self.emitText(html[start..consumed], tag, null);
+                        self.state = State.tag;
+                        // Also consume the <.
+                        return consumed + 1;
                     }
+
+                    // RAWTEXT and RCDATA
+                    const tag_str = @tagName(tag.?);
+                    const tag_end_size = consumed + tag_str.len + 2;
+                    if (html.len >= tag_end_size and html[consumed + 1] == '/') {
+                        const case_ins_tag = try std.ascii.allocLowerString(
+                            allocator,
+                            html[consumed + 2 .. tag_end_size],
+                        );
+                        defer allocator.free(case_ins_tag);
+                        if (tag.? == tag_from_str(case_ins_tag)) {
+                            try self.tag_buffer.appendSlice(allocator, tag_str);
+                            try self.emitText(html[start..consumed], tag, null);
+                            self.state = State.tag_end_found;
+                            return tag_end_size;
+                        }
+                    }
+                } else if (ascii.isWhitespace(c)) {
+                    try self.handleWhitespaceChar(c, &start, html, consumed, tag);
+                } else if (c == 0) {
+                    try self.emitText(html[start..consumed], tag, null);
+                    start = consumed + 1;
+                } else if (c == '&' and (tag == null or !tag_prop.?.is_rawtext)) {
+                    const dec_size, const codepoints = self.decoder.decode(html[consumed + 1 ..]);
+                    if (codepoints) |cps| {
+                        if (cps[1] == 0 and cps[0] <= std.math.maxInt(u8) and
+                            ascii.isWhitespace(@intCast(cps[0])))
+                        {
+                            try self.handleWhitespaceChar(
+                                @intCast(cps[0]),
+                                &start,
+                                html,
+                                consumed,
+                                tag,
+                            );
+                        } else {
+                            try self.emitText(html[start..consumed], tag, cps);
+                        }
+                        consumed += dec_size;
+                        start = consumed + 1;
+                    }
+                } else {
+                    self.preformatted_first = false;
+                    if (self.pending_whitespace == null) continue;
+                    try self.emitText(html[start..consumed], tag, null);
+                    start = consumed;
                 }
             }
 
-            // Text in <math> is ignored unless other math related tags are used.
-            if (self.ignore_depth > 0 or (tag != null and tag.? == .math)) return 1;
+            try self.emitText(html[start..consumed], tag, null);
+            return html.len;
+        }
 
-            if (self.preformatted_depth == 0 and ascii.isWhitespace(c)) {
+        // Helper function for handling whitespace. In preformatted
+        // text the first \r or \n is skipped.
+        fn handleWhitespaceChar(
+            self: *Self,
+            c: u8,
+            start: *usize,
+            html: []const u8,
+            end: usize,
+            tag: ?Tag,
+        ) Error!void {
+            if (self.preformatted_depth == 0) {
+                try self.emitText(html[start.*..end], tag, null);
+                start.* = end + 1;
                 // When last processed tag was br and it inserted a new line,
                 // we do not queue a new space.
-                if (self.pending_whitespace == null and !self.last_br) {
-                    self.pending_whitespace = .space;
+                if (!self.last_br) try self.queueWhitespace(.space);
+            } else {
+                if (self.preformatted_first) {
+                    self.preformatted_first = false;
+                    if (c == '\n' or c == '\r' )start.* += 1;
+                } else {
+                    const c_out = if (c == '\r') '\n' else c;
+                    // preformatted mode turns \r to \n.
+                    try self.emitText(html[start.*..end], tag, null);
+                    if (self.ignore_depth == 0) try self.out_writer.writeByte(c_out);
+                    start.* = end + 1;
                 }
-                return 1;
+            }
+        }
+
+        fn emitText(
+            self: *Self,
+            text: []const u8,
+            tag: ?Tag,
+            codepoints: ?[2]u21,
+        ) Writer.Error!void {
+            // Text in <math> is ignored unless other math related tags are used.
+            if ((text.len == 0 and codepoints == null) or
+                self.ignore_depth > 0 or
+                (tag != null and tag.? == .math))
+            {
+                return;
             }
 
             if (self.pending_whitespace) |pw| {
@@ -468,60 +541,17 @@ pub fn TextExtractor(T: type) type {
                     };
                     try self.out_writer.writeAll(ws);
                 }
+                self.pending_whitespace = null;
             }
-            self.pending_whitespace = null;
-            const consumed = try self.emitText(html, tag, tag_prop);
-            self.last_br = false;
-            return consumed;
-        }
 
-        fn emitText(self: *Self, html: []const u8, tag: ?Tag, tag_prop: ?TagProperty) Error!usize {
-            var consumed: usize = 1;
-
-            // Write decoding.
-            const c = html[0];
-            if (c == '&' and (tag == null or !tag_prop.?.is_rawtext)) {
-                const decoded = self.decoder.decode(html[1..]);
-                if (decoded.@"1") |cps| {
-                    consumed += decoded.@"0";
-
-                    // Decoded could be ascii whitespace.
-                    if (cps[1] == 0 and cps[0] <= std.math.maxInt(u8) and
-                        ascii.isWhitespace(@intCast(cps[0])))
-                    {
-                        if (self.preformatted_depth > 0) {
-                            try self.emitPreformattedWhitespace(@intCast(cps[0]));
-                        } else {
-                            try self.queueWhitespace(.space);
-                        }
-                    } else {
-                        try self.out_writer.print("{u}", .{cps[0]});
-                        if (cps[1] != 0) try self.out_writer.print("{u}", .{cps[1]});
-                    }
-                } else {
-                    try self.out_writer.writeByte(c);
-                }
-            } else if (c != 0) {
-                if (self.preformatted_depth > 0) {
-                    try self.emitPreformattedWhitespace(c);
-                } else {
-                    try self.out_writer.writeByte(c);
-                }
+            if (text.len > 0) try self.out_writer.writeAll(text);
+            if (codepoints) |cps| {
+                try self.out_writer.print("{u}", .{cps[0]});
+                if (cps[1] != 0) try self.out_writer.print("{u}", .{cps[1]});
             }
 
             self.any_text = true;
-            self.preformatted_first = false;
-            return consumed;
-        }
-
-        fn emitPreformattedWhitespace(self: *Self, c: u8) Error!void {
-            var c_out = c;
-            // preformatted mode turns \r to \n.
-            if (c_out == '\r')
-                c_out = '\n';
-
-            if (c_out != '\n' or !self.preformatted_first)
-                try self.out_writer.writeByte(c_out);
+            self.last_br = false;
         }
 
         //<p>ekdy...</p>
@@ -600,6 +630,7 @@ pub fn TextExtractor(T: type) type {
 
         /// Queue whitespace if its rank is higher than the current pending.
         fn queueWhitespace(self: *Self, ws: Whitespace) Error!void {
+            if (!self.any_text) return;
             if (self.pending_whitespace) |*pw| {
                 pw.* = @enumFromInt(@max(@intFromEnum(pw.*), @intFromEnum(ws)));
             } else {
@@ -631,7 +662,7 @@ pub fn TextExtractor(T: type) type {
                     return 0;
                 }
 
-		self.state = if (tag == .script) State.script else State.text;
+                self.state = if (tag == .script) State.script else State.text;
                 return 1;
             }
 
