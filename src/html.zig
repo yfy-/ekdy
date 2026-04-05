@@ -376,7 +376,6 @@ pub fn TextExtractor(T: type) type {
         ) !void {
             while (self.cursor < html.len) {
                 const curr_html = html[self.cursor..];
-                // std.debug.print("state: {} char: {c}\n", .{ self.state, curr_html[0] });
                 self.cursor += try switch (self.state) {
                     .text => self.handleText(allocator, curr_html),
                     .tag => self.handleTag(curr_html),
@@ -426,7 +425,9 @@ pub fn TextExtractor(T: type) type {
 
             var start: usize = 0;
             var consumed: usize = 0;
-            while (consumed < html.len) : (consumed += 1) {
+            while (consumed < html.len) : ({
+                consumed += 1;
+            }) {
                 const c = html[consumed];
                 if (c == '<') {
                     if (tag == null or (!tag_prop.?.is_rawtext and !tag_prop.?.is_rcdata)) {
@@ -507,10 +508,10 @@ pub fn TextExtractor(T: type) type {
             } else {
                 if (self.preformatted_first) {
                     self.preformatted_first = false;
-                    if (c == '\n' or c == '\r' )start.* += 1;
+                    if (c == '\n' or c == '\r') start.* += 1;
                 } else {
-                    const c_out = if (c == '\r') '\n' else c;
                     // preformatted mode turns \r to \n.
+                    const c_out = if (c == '\r') '\n' else c;
                     try self.emitText(html[start.*..end], tag, null);
                     if (self.ignore_depth == 0) try self.out_writer.writeByte(c_out);
                     start.* = end + 1;
@@ -524,7 +525,6 @@ pub fn TextExtractor(T: type) type {
             tag: ?Tag,
             codepoints: ?[2]u21,
         ) Writer.Error!void {
-            // Text in <math> is ignored unless other math related tags are used.
             if ((text.len == 0 and codepoints == null) or
                 self.ignore_depth > 0 or
                 (tag != null and tag.? == .math))
@@ -850,7 +850,7 @@ pub fn TextExtractor(T: type) type {
             comptime tag_prefix: []const u8,
         ) Error!usize {
             if (html.len < tag_prefix.len + 1)
-                return html.len;
+                return 0;
 
             var lowercase_buf: [tag_prefix.len]u8 = undefined;
             const lowercase = ascii.lowerString(&lowercase_buf, html[0..tag_prefix.len]);
@@ -894,7 +894,7 @@ pub fn TextExtractor(T: type) type {
             }
 
             // Consumed everything
-            return html.len;
+            return 0;
         }
 
         // Handle exit from a script tag here.
@@ -920,7 +920,9 @@ pub fn TextExtractor(T: type) type {
             }
 
             const escape_tok = "<!--";
-            if (std.mem.eql(u8, html[0..escape_tok.len], escape_tok)) {
+            if (escape_tok.len <= html.len and
+                std.mem.eql(u8, html[0..escape_tok.len], escape_tok))
+            {
                 self.state = .script_escaped;
                 return escape_tok.len;
             }
