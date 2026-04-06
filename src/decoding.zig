@@ -6,8 +6,7 @@ const Allocator = std.mem.Allocator;
 pub const html_unicode_max: u21 = 0x10FFFF;
 pub const html_unicode_invalid: u21 = 0xFFFD;
 
-/// Provides an unbuffered writer interface for decoding HTML
-/// entities. Output will be written to the given output writer.
+/// Provides the state machine for decoding html entities.
 pub const EntityDecoder = struct {
     const Self = @This();
 
@@ -43,8 +42,7 @@ pub const EntityDecoder = struct {
         return self.numeric_entity;
     }
 
-    /// Writes longest matching named entity if there are any matches.
-    /// Otherwise write whatever has been buffered.
+    /// Matches longest named entity if there is any.
     fn match_named_longest(self: *Self) struct { usize, ?[2]u21 } {
         var i = self.named_entity_len;
         while (i > 1) : (i -= 1) {

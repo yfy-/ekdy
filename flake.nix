@@ -30,21 +30,6 @@
               chromium
               parallel
             ];
-
-          shellHook = ''
-            export VENV_DIR="$PWD/.venv"
-
-            if [ ! -d "$VENV_DIR" ]; then
-              python -m venv "$VENV_DIR"
-            fi
-
-            source "$VENV_DIR/bin/activate"
-
-            if ! python -c "import resiliparse" >/dev/null 2>&1; then
-              python -m pip install --upgrade pip wheel setuptools
-              python -m pip install resiliparse fastwarc
-            fi
-          '';
         };
       }
     );
