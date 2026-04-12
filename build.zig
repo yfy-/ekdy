@@ -82,6 +82,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    b.installArtifact(exe);
 
     // This creates a top level step. Top level steps have a name and can be
     // invoked by name when running `zig build` (e.g. `zig build run`).
