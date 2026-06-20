@@ -123,7 +123,7 @@ pub const tag_property_overrides = [_]struct { html.Tag, html.TagProperty }{.{
 
 const Self = @This();
 
-pub fn onTagStart(self: *Self, tag: html.Tag, writer: *std.io.Writer) !?html.Whitespace {
+pub fn onTagStart(self: *Self, tag: html.Tag, writer: *std.Io.Writer) !?html.Whitespace {
     _ = self;
     _ = writer;
     return tag_start_whitespaces.get(tag);
@@ -132,7 +132,7 @@ pub fn onTagStart(self: *Self, tag: html.Tag, writer: *std.io.Writer) !?html.Whi
 pub fn onTagEnd(
     self: *Self,
     end_tag: html.Tag,
-    writer: *std.io.Writer,
+    writer: *std.Io.Writer,
 ) !?html.Whitespace {
     _ = self;
     _ = writer;

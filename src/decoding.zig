@@ -178,7 +178,7 @@ pub const EntityDecoder = struct {
 const talloc = std.testing.allocator;
 
 fn expectDecodeEntity(entity: []const u8, expected: struct { usize, []const u8 }) !void {
-    var allocating = std.io.Writer.Allocating.init(talloc);
+    var allocating = std.Io.Writer.Allocating.init(talloc);
     defer allocating.deinit();
     var decoder = EntityDecoder{};
     const decoded = decoder.decode(entity);

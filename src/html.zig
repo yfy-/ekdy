@@ -5,7 +5,7 @@ const fs = std.fs;
 
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
-const Writer = std.io.Writer;
+const Writer = std.Io.Writer;
 
 pub const Error = Allocator.Error || Writer.Error;
 
@@ -311,7 +311,7 @@ pub fn TextExtractor(T: type) type {
         /// Output writer.
         out_writer: *Writer,
 
-        stack: ArrayList(Tag) = ArrayList(Tag){},
+        stack: ArrayList(Tag) = ArrayList(Tag).empty,
 
         /// Buffer for current tag.
         tag_buffer: ArrayList(u8),
@@ -989,7 +989,7 @@ const talloc = std.testing.allocator;
 
 /// Check if html to text works as expected.
 fn expectConvert(expected: []const u8, html_text: []const u8) !void {
-    var allocating = std.io.Writer.Allocating.init(talloc);
+    var allocating = std.Io.Writer.Allocating.init(talloc);
     defer allocating.deinit();
     const InnerText = @import("policy/InnerText.zig");
     var policy = InnerText{};
@@ -1130,13 +1130,13 @@ fn expectConvertFile(comptime file_base: []const u8) !void {
     );
     defer talloc.free(html_path);
 
-    const html_file = try fs.cwd().openFile(html_path, .{});
-    defer html_file.close();
+    const io = std.testing.io;
+    const cwd = std.Io.Dir.cwd();
+    const html_file = try cwd.openFile(io, html_path, .{});
+    defer html_file.close(io);
 
-    const html = try html_file.readToEndAlloc(
-        talloc,
-        5 * 1024 * 1024,
-    );
+    var html_file_reader = html_file.reader(io, &.{});
+    const html = try html_file_reader.interface.allocRemaining(talloc, .unlimited);
     defer talloc.free(html);
 
     // Read text file
@@ -1146,13 +1146,11 @@ fn expectConvertFile(comptime file_base: []const u8) !void {
     );
     defer talloc.free(text_path);
 
-    const text_file = try fs.cwd().openFile(text_path, .{});
-    defer text_file.close();
+    const text_file = try cwd.openFile(io, text_path, .{});
+    defer text_file.close(io);
 
-    const text = try text_file.readToEndAlloc(
-        talloc,
-        5 * 1024 * 1024,
-    );
+    var text_file_reader = text_file.reader(io, &.{});
+    const text = try text_file_reader.interface.allocRemaining(talloc, .unlimited);
     defer talloc.free(text);
 
     try expectConvert(text, html);
@@ -1213,17 +1211,17 @@ fn expectHTML5(
         &[_][]const u8{ src_dir, "test-resource", "html5lib-expectations", ekdytest_filename },
     );
     defer talloc.free(ekdytest_path);
+    const io = std.testing.io;
+    const ekdytest_file = try std.Io.Dir.cwd().openFile(io, ekdytest_path, .{});
+    defer ekdytest_file.close(io);
 
-    const ekdytest_file = try fs.cwd().openFile(ekdytest_path, .{});
-    defer ekdytest_file.close();
-
-    const read_buf = try talloc.alloc(u8, (try ekdytest_file.stat()).size);
+    const read_buf = try talloc.alloc(u8, (try ekdytest_file.stat(io)).size);
     defer talloc.free(read_buf);
-    var et_reader = ekdytest_file.reader(read_buf);
+    var et_reader = ekdytest_file.reader(io, read_buf);
     const reader = &et_reader.interface;
 
-    var html_da = ArrayList(u8){};
-    var text_da = ArrayList(u8){};
+    var html_da = ArrayList(u8).empty;
+    var text_da = ArrayList(u8).empty;
     defer {
         html_da.deinit(talloc);
         text_da.deinit(talloc);
