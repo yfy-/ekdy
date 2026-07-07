@@ -366,10 +366,15 @@ pub fn TextExtractor(T: type) type {
             self.tag_buffer.deinit(allocator);
         }
 
+        pub fn convertAll(self: *Self, allocator: Allocator, html: []const u8) !void {
+            try self.convert(allocator, html);
+            try self.eos();
+        }
+
         /// Convert a chunk of html to text.
         /// Can be repeteadly called for consecutive html chunks.
         /// When all the chunks are transformed eos must be called.
-        pub fn convert(
+        fn convert(
             self: *Self,
             allocator: Allocator,
             html: []const u8,
@@ -398,7 +403,7 @@ pub fn TextExtractor(T: type) type {
 
         /// Writes any text remaining. Should be called after all html
         /// chunks are processed with convert.
-        pub fn eos(self: *Self) !void {
+        fn eos(self: *Self) !void {
             switch (self.state) {
                 .tag => {
                     try self.out_writer.writeByte('<');

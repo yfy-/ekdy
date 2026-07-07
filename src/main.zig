@@ -22,13 +22,7 @@ pub fn main(init: std.process.Init) !void {
     var extractor = try ekdy.html.TextExtractor(InnerText).init(allocator, stdout, &policy);
     defer extractor.deinit(allocator);
 
-    while (stdin.fillMore()) {
-        const chunk = stdin.buffered();
-        defer stdin.tossBuffered();
-        if (chunk.len == 0) continue;
-        try extractor.convert(allocator, chunk);
-    } else |err| if (err == error.ReadFailed) return err;
-
-    try extractor.eos();
+    const html = try stdin.allocRemaining(allocator, .unlimited);
+    try extractor.convertAll(allocator, html);
     try stdout.flush();
 }
