@@ -400,7 +400,7 @@ pub fn TextExtractor(T: type) type {
             try self.finish();
         }
 
-        fn step(self: *Self, allocator: Allocator, html: []const u8) !ParseStep {
+        inline fn step(self: *Self, allocator: Allocator, html: []const u8) !ParseStep {
             return try switch (self.state) {
                 .text => self.handleText(html),
                 .decoding => self.handleDecoding(html),
@@ -583,7 +583,7 @@ pub fn TextExtractor(T: type) type {
             }
         }
 
-        fn emitText(
+        inline fn emitText(
             self: *Self,
             text: []const u8,
             tag: ?Tag,
@@ -675,7 +675,7 @@ pub fn TextExtractor(T: type) type {
         /// result might be inconclusive thereby we use partial.
         const ForwardMatchResult = enum { full, partial, none };
 
-        fn forwardMatch(target: []const u8, html: []const u8) ForwardMatchResult {
+        inline fn forwardMatch(target: []const u8, html: []const u8) ForwardMatchResult {
             const min_len = @min(target.len, html.len);
             if (std.mem.eql(u8, target[0..min_len], html[0..min_len])) {
                 return if (target.len == min_len) .full else .partial;
@@ -1080,9 +1080,14 @@ pub fn TextExtractor(T: type) type {
 
         // <script>ekdy...</script>
         //         ^~~~~~~
-        // FIXME: This part cannot be simply converted to SIMD.
-        // for SIMD we need to first look for a '<' match.
         fn handleScript(self: *Self, html: []const u8) Error!ParseStep {
+            // NOTE: Fast path for script transition check. If we only
+            // check below using `tagMatchScriptMode` we always
+            // lowercase the `html` which is extremely slow as it is
+            // done on every character.
+            if (html[0] != '<')
+                return .{.consumed = 1};
+
             if (try self.tagMatchScriptMode(html, "</script")) |m| {
                 if (!m.buffer_rest)
                     self.endScript();
