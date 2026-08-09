@@ -19,10 +19,16 @@ pub fn main(init: std.process.Init) !void {
     const stdout = &stdout_writer.interface;
 
     var policy = InnerText{};
-    var extractor = try ekdy.html.TextExtractor(InnerText).init(allocator, stdout, &policy);
+    var extractor = try ekdy.html.TextExtractor(InnerText).init(stdout, &policy);
     defer extractor.deinit(allocator);
 
-    const html = try stdin.allocRemaining(allocator, .unlimited);
-    try extractor.convertAll(allocator, html);
+    while (stdin.fillMore()) {
+        const chunk = stdin.buffered();
+        defer stdin.tossBuffered();
+        if (chunk.len == 0) continue;
+        try extractor.feed(allocator, chunk);
+    } else |err| if (err == error.ReadFailed) return err;
+
+    try extractor.finish();
     try stdout.flush();
 }

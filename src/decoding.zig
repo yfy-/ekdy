@@ -5,8 +5,19 @@ const Allocator = std.mem.Allocator;
 
 pub const html_unicode_max: u21 = 0x10FFFF;
 pub const html_unicode_invalid: u21 = 0xFFFD;
+pub const utf16_surrogate_low: u21 = 0xD800;
+pub const utf16_surrogate_high: u21 = 0xDFFF;
 
-/// Provides the state machine for decoding html entities.
+pub const windows_1252_table = [_]u21{
+    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039,
+    0x0152, 0x008D, 0x017D, 0x008F, 0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178,
+};
+
+pub const windows_1252_low: u21 = 0x0080;
+pub const windows_1252_high: u21 = 0x009F;
+
+/// A streaming entity decoder.
 pub const EntityDecoder = struct {
     const Self = @This();
 
@@ -23,15 +34,20 @@ pub const EntityDecoder = struct {
     named_entity_len: u8 = 0,
     numeric_entity: u21 = 0,
     named_entity: [32]u8 = undefined,
+    hex_upper: bool = false,
 
     pub fn reset(self: *Self) void {
         self.named_entity_len = 0;
         self.numeric_entity = 0;
-	self.state = .entity_begin;
+        self.state = .entity_begin;
+        self.hex_upper = false;
     }
 
     fn numeric_codepoint(self: *Self) u21 {
-        if (self.numeric_entity == 0 or self.numeric_entity > html_unicode_max) {
+        if (self.numeric_entity == 0 or self.numeric_entity > html_unicode_max or
+            (self.numeric_entity >= utf16_surrogate_low and
+                self.numeric_entity <= utf16_surrogate_high))
+        {
             return html_unicode_invalid;
         }
 
@@ -42,23 +58,25 @@ pub const EntityDecoder = struct {
         return self.numeric_entity;
     }
 
-    /// Matches longest named entity if there is any.
-    fn match_named_longest(self: *Self) struct { usize, ?[2]u21 } {
-        var i = self.named_entity_len;
-        while (i > 1) : (i -= 1) {
-            const ent_name = self.named_entity[0..i];
-            if (encoding_entity_map.get(ent_name)) |*codepoints| {
-                return .{ i, codepoints.* };
-            }
-        }
+    pub const Emit = struct {
+        codepoints: ?[2]u21 = null,
+        literal: []const u8 = "",
+    };
 
-        return .{ 0, null };
-    }
+    const FeedResult = struct {
+        consumed: usize,
+        emit: ?Emit = null,
+    };
 
-    /// Write a chunk decoding.
-    pub fn decode(self: *Self, chunk: []const u8) struct { usize, ?[2]u21 } {
-        // FIXME: This has become so much complex than I initially thought.
-        // It will look simpler if each state has its own function.
+    /// Feed the decoder with a chunk of HTML. First call must be made
+    /// right after the '&' character (excluding it). Result will
+    /// contain how many bytes are processed and an optional emit data
+    /// as the result of decoding. On successful decoding (meaning a
+    /// valid entity) emit data will have non-null codepoints which
+    /// should be output. In addition, the bytes that do not
+    /// contribute to the codepoints are also provided in the literal
+    /// which is the leftover value after the codepoints.
+    pub fn feed(self: *Self, chunk: []const u8) FeedResult {
         for (chunk, 0..) |c, i| {
             switch (self.state) {
                 .entity_begin => {
@@ -70,15 +88,18 @@ pub const EntityDecoder = struct {
                             self.state = .entity_named;
                         },
                         else => {
-                            defer self.reset();
-                            return .{ 0, null };
+                            return .{ .consumed = i, .emit = self.finishEntityBegin() };
                         },
                     }
                 },
                 .numeric_begin => {
                     switch (c) {
-                        'x', 'X' => {
+                        'x' => {
                             self.state = .hex_begin;
+                        },
+                        'X' => {
+                            self.state = .hex_begin;
+                            self.hex_upper = true;
                         },
                         '0'...'9' => {
                             self.numeric_entity = std.fmt.charToDigit(
@@ -88,8 +109,7 @@ pub const EntityDecoder = struct {
                             self.state = .entity_decimal;
                         },
                         else => {
-                            defer self.reset();
-                            return .{ 0, null };
+                            return .{ .consumed = i, .emit = self.finishNumericBegin() };
                         },
                     }
                 },
@@ -103,17 +123,12 @@ pub const EntityDecoder = struct {
                             self.state = .entity_hex;
                         },
                         else => {
-                            defer self.reset();
-                            return .{ 0, null };
+                            return .{ .consumed = i, .emit = self.finishHexBegin() };
                         },
                     }
                 },
                 .entity_decimal => {
                     switch (c) {
-                        ';' => {
-                            defer self.reset();
-                            return .{ i + 1, .{ self.numeric_codepoint(), 0 } };
-                        },
                         '0'...'9' => {
                             self.numeric_entity *|= 10;
                             self.numeric_entity +|= std.fmt.charToDigit(
@@ -122,17 +137,15 @@ pub const EntityDecoder = struct {
                             ) catch unreachable;
                         },
                         else => {
-                            defer self.reset();
-                            return .{ i, .{ self.numeric_codepoint(), 0 } };
+                            return .{
+                                .consumed = if (c == ';') i + 1 else i,
+                                .emit = self.finishEntityNumber(),
+                            };
                         },
                     }
                 },
                 .entity_hex => {
                     switch (c) {
-                        ';' => {
-                            defer self.reset();
-                            return .{ i + 1, .{ self.numeric_codepoint(), 0 } };
-                        },
                         '0'...'9', 'a'...'f', 'A'...'F' => {
                             self.numeric_entity *|= 16;
                             self.numeric_entity +|= std.fmt.charToDigit(
@@ -141,23 +154,25 @@ pub const EntityDecoder = struct {
                             ) catch unreachable;
                         },
                         else => {
-                            defer self.reset();
-                            return .{ i, .{ self.numeric_codepoint(), 0 } };
+                            return .{
+                                .consumed = if (c == ';') i + 1 else i,
+                                .emit = self.finishEntityNumber(),
+                            };
                         },
                     }
                 },
                 .entity_named => {
                     if (self.named_entity_len == 32) {
-                        defer self.reset();
-                        return .{ 0, null };
+                        return .{ .consumed = i, .emit = self.finishEntityNamed() };
                     } else if (!std.ascii.isAlphanumeric(c)) {
-                        defer self.reset();
+                        var consumed = i;
                         if (c == ';') {
                             self.named_entity[self.named_entity_len] = c;
                             self.named_entity_len += 1;
+                            consumed += 1;
                         }
 
-                        return self.match_named_longest();
+                        return .{ .consumed = consumed, .emit = self.finishEntityNamed() };
                     } else {
                         self.named_entity[self.named_entity_len] = c;
                         self.named_entity_len += 1;
@@ -166,64 +181,121 @@ pub const EntityDecoder = struct {
             }
         }
 
+        return .{ .consumed = chunk.len };
+    }
+
+    fn finishEntityBegin(self: *Self) Emit {
         defer self.reset();
+        return .{};
+    }
+
+    fn finishNumericBegin(self: *Self) Emit {
+        defer self.reset();
+        return .{ .literal = "#" };
+    }
+
+    fn finishHexBegin(self: *Self) Emit {
+        defer self.reset();
+        return .{ .literal = if (self.hex_upper) "#X" else "#x" };
+    }
+
+    fn finishEntityNumber(self: *Self) Emit {
+        defer self.reset();
+        return .{ .codepoints = .{ self.numeric_codepoint(), 0 } };
+    }
+
+    /// Matches longest named entity if there is any.
+    fn finishEntityNamed(self: *Self) Emit {
+        defer self.reset();
+        var found = self.named_entity_len;
+        var codepoints: ?[2]u21 = null;
+        while (found > 1) : (found -= 1) {
+            const ent_name = self.named_entity[0..found];
+            if (encoding_entity_map.get(ent_name)) |*cps| {
+                codepoints = cps.*;
+                break;
+            }
+        }
+
+        // Literal start
+        const ls = if (codepoints == null) 0 else found;
+
+        return .{
+            .codepoints = codepoints,
+            .literal = if (ls < self.named_entity_len)
+                self.named_entity[ls..self.named_entity_len]
+            else
+                "",
+        };
+    }
+
+    pub fn finish(self: *Self) Emit {
         return switch (self.state) {
-            .entity_begin, .numeric_begin, .hex_begin => .{ 0, null },
-            .entity_decimal, .entity_hex => .{ chunk.len, .{ self.numeric_codepoint(), 0 } },
-            .entity_named => self.match_named_longest(),
+            .entity_begin => self.finishEntityBegin(),
+            .numeric_begin => self.finishNumericBegin(),
+            .hex_begin => self.finishHexBegin(),
+            .entity_decimal, .entity_hex => self.finishEntityNumber(),
+            .entity_named => self.finishEntityNamed(),
         };
     }
 };
 
 const talloc = std.testing.allocator;
 
-fn expectDecodeEntity(entity: []const u8, expected: struct { usize, []const u8 }) !void {
-    var allocating = std.Io.Writer.Allocating.init(talloc);
-    defer allocating.deinit();
+fn expectDecodeEntity(entity: []const u8, expected: struct { usize, []const u8, []const u8 }) !void {
     var decoder = EntityDecoder{};
-    const decoded = decoder.decode(entity);
-    const writer = &allocating.writer;
-    if (decoded.@"1") |cps| {
+    const decoded = decoder.feed(entity);
+    try std.testing.expectEqual(expected.@"0", decoded.consumed);
+
+    const emit = if (decoded.emit) |e| e else decoder.finish();
+    if (expected.@"1".len == 0) {
+        try std.testing.expect(emit.codepoints == null);
+    } else {
+        try std.testing.expect(emit.codepoints != null);
+
+        var allocating = std.Io.Writer.Allocating.init(talloc);
+        defer allocating.deinit();
+        const writer = &allocating.writer;
+
+        const cps = emit.codepoints.?;
         try writer.print("{u}", .{cps[0]});
         if (cps[1] != 0) try writer.print("{u}", .{cps[1]});
         const act = try allocating.toOwnedSlice();
         defer talloc.free(act);
-
         try std.testing.expectEqualStrings(expected.@"1", act);
-    } else {
-        try std.testing.expectEqual(expected.@"1".len, 0);
     }
 
-    try std.testing.expectEqual(expected.@"0", decoded.@"0");
+    try std.testing.expectEqualStrings(expected.@"2", emit.literal);
 }
 
 test "decodeEntityDecimal" {
-    try expectDecodeEntity("#8790;", .{ 6, "≖" });
+    try expectDecodeEntity("#8790;", .{ 6, "≖", "" });
 }
 
 test "decodeEntityHex" {
-    try expectDecodeEntity("#x2244;", .{ 7, "≄" });
-    try expectDecodeEntity("#X2244;", .{ 7, "≄" });
+    try expectDecodeEntity("#x2244;", .{ 7, "≄", "" });
+    try expectDecodeEntity("#X2244;", .{ 7, "≄", "" });
 }
 
 test "decodeEntityKeyword" {
-    try expectDecodeEntity("Icy;", .{ 4, "И" });
+    try expectDecodeEntity("Icy;", .{ 4, "И", "" });
 }
 
 test "decodeEntityKeywordDoublePoint" {
-    try expectDecodeEntity("nsupseteqq;", .{ 11, "⫆̸" });
+    try expectDecodeEntity("nsupseteqq;", .{ 11, "⫆̸", "" });
 }
 
 test "decodeSimpleChar" {
-    try expectDecodeEntity("a", .{ 0, "" });
+    try expectDecodeEntity("a", .{ 1, "", "a" });
 }
 
 test "decodeEntityInvalidHexFirstChar" {
-    try expectDecodeEntity("#xGG00;", .{ 0, "" });
+    try expectDecodeEntity("#xGG00;", .{ 2, "", "#x" });
+    try expectDecodeEntity("#XGG00;", .{ 2, "", "#X" });
 }
 
 test "decodeEntityInvalidHex" {
-    try expectDecodeEntity("#x3CG00;", .{ 4, "<" });
+    try expectDecodeEntity("#x3CG00;", .{ 4, "<", "" });
 }
 
 test "decodeEntityOverflowDecimal" {
@@ -233,36 +305,27 @@ test "decodeEntityOverflowDecimal" {
         "{u}",
         .{html_unicode_invalid},
     );
-    try expectDecodeEntity("#4194304;", .{ 9, out_buf });
+    try expectDecodeEntity("#4194304;", .{ 9, out_buf, "" });
 }
 
 test "decodeEntityKeywordNonexistent" {
-    try expectDecodeEntity("abcde;", .{ 0, "" });
+    try expectDecodeEntity("abcde;", .{ 6, "", "abcde;" });
 }
 
 test "decodeNamedEntityLong" {
     try expectDecodeEntity(
         "CounterClockwiseContourIntegralaaa;",
-        .{ 0, "" },
+        .{ 32, "", "CounterClockwiseContourIntegrala" },
     );
 }
 
 test "decodeLongestMatch" {
-    try expectDecodeEntity("ampx ", .{ 3, "&" });
+    try expectDecodeEntity("ampx ", .{ 4, "&", "x" });
 }
 
 test "numericInvalidEnd" {
-    try expectDecodeEntity("#60x", .{3, "<"});
+    try expectDecodeEntity("#60x", .{ 3, "<", "" });
 }
-
-pub const windows_1252_table = [_]u21{
-    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039,
-    0x0152, 0x008D, 0x017D, 0x008F, 0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
-    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178,
-};
-
-pub const windows_1252_low: u21 = 0x0080;
-pub const windows_1252_high: u21 = 0x009F;
 
 pub const encoding_entity_map = std.StaticStringMap([2]u21).initComptime(
     .{

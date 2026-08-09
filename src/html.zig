@@ -266,6 +266,15 @@ pub const tag_to_enum = std.StaticStringMap(Tag).initComptime(blk: {
     break :blk init_vals;
 });
 
+pub const max_tag_len = blk: {
+    var max_len = 0;
+    for (std.meta.fields(Tag)) |field| {
+        max_len = @max(max_len, field.name.len);
+    }
+
+    break :blk max_len;
+};
+
 pub fn is_valid_fs_tag_char(c: u8) bool {
     return ascii.isAlphabetic(c) or c == '!' or c == '?' or c == '/';
 }
@@ -274,6 +283,9 @@ pub fn TextExtractor(T: type) type {
     return struct {
         const Self = @This();
         const tag_properties = initTagProps();
+
+        // Maximum size to copy from current html chunk to residual.
+        const max_refill_size = 32;
 
         /// Whitespace type to emit.
         pending_whitespace: ?Whitespace = null,
@@ -314,7 +326,19 @@ pub fn TextExtractor(T: type) type {
         stack: ArrayList(Tag) = ArrayList(Tag).empty,
 
         /// Buffer for current tag.
-        tag_buffer: ArrayList(u8),
+        tag_buffer: [max_tag_len]u8 = undefined,
+
+        /// Current tag length.
+        tag_buffer_len: usize = 0,
+
+        /// Flag to indicate tag has overflown and should be just unknown.
+        tag_buffer_overflow: bool = false,
+
+        /// Buffer for residual html that stores copies of previous chunks.
+        residual_html: ArrayList(u8) = ArrayList(u8).empty,
+
+        /// Residual html cursor.
+        residual_cursor: usize = 0,
 
         /// Entity decoder.
         decoder: decoding.EntityDecoder = decoding.EntityDecoder{},
@@ -324,6 +348,7 @@ pub fn TextExtractor(T: type) type {
 
         const State = enum {
             text,
+            decoding,
             tag,
             tag_start,
             tag_start_found,
@@ -353,9 +378,8 @@ pub fn TextExtractor(T: type) type {
             return props;
         }
 
-        pub fn init(allocator: Allocator, out_writer: *Writer, policy: *T) !Self {
+        pub fn init(out_writer: *Writer, policy: *T) !Self {
             return Self{
-                .tag_buffer = try ArrayList(u8).initCapacity(allocator, 32),
                 .out_writer = out_writer,
                 .policy = policy,
             };
@@ -363,68 +387,130 @@ pub fn TextExtractor(T: type) type {
 
         pub fn deinit(self: *Self, allocator: Allocator) void {
             self.stack.deinit(allocator);
-            self.tag_buffer.deinit(allocator);
+            self.residual_html.deinit(allocator);
         }
 
-        pub fn convertAll(self: *Self, allocator: Allocator, html: []const u8) !void {
-            try self.convert(allocator, html);
-            try self.eos();
+        const ParseStep = struct {
+            consumed: usize,
+            buffer_rest: bool = false,
+        };
+
+        pub fn feedAll(self: *Self, allocator: Allocator, html: []const u8) !void {
+            try self.feed(allocator, html);
+            try self.finish();
         }
 
-        /// Convert a chunk of html to text.
+        fn step(self: *Self, allocator: Allocator, html: []const u8) !ParseStep {
+            return try switch (self.state) {
+                .text => self.handleText(html),
+                .decoding => self.handleDecoding(html),
+                .tag => self.handleTag(html),
+                .tag_start => self.handleTagStart(allocator, html),
+                .tag_start_found => self.handleTagStartFound(html),
+                .tag_end => self.handleTagEnd(html),
+                .tag_end_found => self.handleTagEndFound(html),
+                .attr_key => self.handleAttrKey(html),
+                .attr_val => self.handleAttrVal(html),
+                .comment => self.handleComment(html),
+                .plaintext => self.handlePlaintext(html),
+                .script => self.handleScript(html),
+                .script_escaped => self.handleScriptEscaped(html),
+                .script_double_escaped => self.handleScriptDoubleEscaped(html),
+                .frameset => self.handleFrameSet(html),
+            };
+        }
+
+        /// Feed a chunk of html.
         /// Can be repeteadly called for consecutive html chunks.
-        /// When all the chunks are transformed eos must be called.
-        fn convert(
+        /// When all the chunks are fed, finish must be called.
+        pub fn feed(
             self: *Self,
             allocator: Allocator,
             html: []const u8,
         ) !void {
-            while (self.cursor < html.len) {
-                const curr_html = html[self.cursor..];
-                self.cursor += try switch (self.state) {
-                    .text => self.handleText(allocator, curr_html),
-                    .tag => self.handleTag(curr_html),
-                    .tag_start => self.handleTagStart(allocator, curr_html),
-                    .tag_start_found => self.handleTagStartFound(curr_html),
-                    .tag_end => self.handleTagEnd(allocator, curr_html),
-                    .tag_end_found => self.handleTagEndFound(curr_html),
-                    .attr_key => self.handleAttrKey(curr_html),
-                    .attr_val => self.handleAttrVal(curr_html),
-                    .comment => self.handleComment(curr_html),
-                    .plaintext => self.handlePlaintext(curr_html),
-                    .script => self.handleScript(curr_html),
-                    .script_escaped => self.handleScriptEscaped(curr_html),
-                    .script_double_escaped => self.handleScriptDoubleEscaped(curr_html),
-                    .frameset => self.handleFrameSet(curr_html),
-                };
+            // Cursor should always reset after this because we always fully use html.
+            defer self.cursor = 0;
+
+            if (html.len == 0)
+                return;
+
+            // Feed the residual if we have anything buffered there.
+            if (self.residual_html.items.len > 0) {
+                const init_copy_sz = @min(html.len - self.cursor, max_refill_size);
+                try self.residual_html.appendSlice(allocator, html[0..init_copy_sz]);
+                self.cursor += init_copy_sz;
+                while (self.residual_cursor < self.residual_html.items.len) {
+                    const step_res = try self.step(
+                        allocator,
+                        self.residual_html.items[self.residual_cursor..],
+                    );
+                    self.residual_cursor += step_res.consumed;
+                    if (step_res.buffer_rest) {
+                        const copy_sz = @min(html.len - self.cursor, max_refill_size);
+                        if (copy_sz == 0)
+                            return;
+
+                        try self.residual_html.appendSlice(allocator, html[0..copy_sz]);
+                        self.cursor += copy_sz;
+                    }
+                }
+
+                self.residual_cursor = 0;
+                self.residual_html.clearRetainingCapacity();
             }
-            self.cursor -= html.len;
+
+            // Feed the rest of the html buffer.
+            while (self.cursor < html.len) {
+                const step_res = try self.step(allocator, html[self.cursor..]);
+                self.cursor += step_res.consumed;
+                if (step_res.buffer_rest) {
+                    try self.residual_html.appendSlice(allocator, html[self.cursor..]);
+                    break;
+                }
+            }
         }
 
         /// Writes any text remaining. Should be called after all html
-        /// chunks are processed with convert.
-        fn eos(self: *Self) !void {
+        /// chunks are fed.
+        pub fn finish(self: *Self) !void {
             switch (self.state) {
                 .tag => {
-                    try self.out_writer.writeByte('<');
+                    try self.emitText("<", self.stack.getLastOrNull());
                 },
                 .tag_end => {
                     // Only output </ when tag buffer is empty.
                     // If any tag has started than output nothing.
-                    if (self.tag_buffer.items.len == 0)
-                        _ = try self.out_writer.write("</");
+                    if (self.tag_buffer_len == 0)
+                        _ = try self.emitText("</", self.stack.getLastOrNull());
+                },
+                .decoding => {
+                    try self.emitDecoded(self.decoder.finish());
                 },
                 else => {},
             }
+        }
+
+        /// Peek tag ending matches for RCDATA and RAWTEXT tags.
+        fn peekRawEndTag(self: *Self, tag: Tag, html: []const u8) ForwardMatchResult {
+            const tag_end_fw = forwardMatch("</", html);
+            if (tag_end_fw != .full) return tag_end_fw;
+
+            if (html.len <= 2) return .partial;
+            const tag_str = @tagName(tag);
+            self.tag_buffer_len = @min(html.len - 2, tag_str.len);
+            const lower_tag = std.ascii.lowerString(
+                &self.tag_buffer,
+                html[2 .. self.tag_buffer_len + 2],
+            );
+            return forwardMatch(tag_str, lower_tag);
         }
 
         //<p>ekdy...</p>
         //   ^~~~~~~
         fn handleText(
             self: *Self,
-            allocator: Allocator,
             html: []const u8,
-        ) Error!usize {
+        ) Error!ParseStep {
             const tag = self.stack.getLastOrNull();
             const tag_prop = if (tag) |t| tag_properties.get(t) else null;
 
@@ -436,91 +522,64 @@ pub fn TextExtractor(T: type) type {
                 const c = html[consumed];
                 if (c == '<') {
                     if (tag == null or (!tag_prop.?.is_rawtext and !tag_prop.?.is_rcdata)) {
-                        try self.emitText(html[start..consumed], tag, null);
+                        try self.emitText(html[start..consumed], tag);
                         self.state = State.tag;
                         // Also consume the <.
-                        return consumed + 1;
+                        return .{ .consumed = consumed + 1 };
                     }
 
                     // RAWTEXT and RCDATA
-                    const tag_str = @tagName(tag.?);
-                    const tag_end_size = consumed + tag_str.len + 2;
-                    if (html.len >= tag_end_size and html[consumed + 1] == '/') {
-                        const case_ins_tag = try std.ascii.allocLowerString(
-                            allocator,
-                            html[consumed + 2 .. tag_end_size],
-                        );
-                        defer allocator.free(case_ins_tag);
-                        if (tag.? == tag_from_str(case_ins_tag)) {
-                            try self.tag_buffer.appendSlice(allocator, tag_str);
-                            try self.emitText(html[start..consumed], tag, null);
-                            self.state = State.tag_end_found;
-                            return tag_end_size;
-                        }
+                    const raw_end_match = self.peekRawEndTag(tag.?, html[consumed..]);
+                    if (raw_end_match == .partial) return .{
+                        .consumed = consumed,
+                        .buffer_rest = true,
+                    };
+
+                    if (raw_end_match == .full) {
+                        try self.emitText(html[start..consumed], tag);
+                        self.state = State.tag_end_found;
+                        // Tag buffer currently contains the correct tag
+                        // we also consume the "</".
+                        return .{ .consumed = consumed + self.tag_buffer_len + 2 };
                     }
                 } else if (ascii.isWhitespace(c)) {
-                    try self.handleWhitespaceChar(c, &start, html, consumed, tag);
+                    try self.emitText(html[start..consumed], tag);
+                    try self.handleWhitespace(c);
+                    start = consumed + 1;
                 } else if (c == 0) {
-                    try self.emitText(html[start..consumed], tag, null);
+                    try self.emitText(html[start..consumed], tag);
                     start = consumed + 1;
                 } else if (c == '&' and (tag == null or !tag_prop.?.is_rawtext)) {
-                    const dec_size, const codepoints = self.decoder.decode(html[consumed + 1 ..]);
-                    if (codepoints) |cps| {
-                        if (cps[1] == 0 and cps[0] <= std.math.maxInt(u8) and
-                            ascii.isWhitespace(@intCast(cps[0])))
-                        {
-                            try self.handleWhitespaceChar(
-                                @intCast(cps[0]),
-                                &start,
-                                html,
-                                consumed,
-                                tag,
-                            );
-                        } else {
-                            try self.emitText(html[start..consumed], tag, cps);
-                        }
-                        consumed += dec_size;
-                        start = consumed + 1;
-                    }
+                    try self.emitText(html[start..consumed], tag);
+                    self.state = State.decoding;
+                    return .{ .consumed = consumed + 1 };
                 } else {
                     self.preformatted_first = false;
                     if (self.pending_whitespace == null) continue;
-                    try self.emitText(html[start..consumed], tag, null);
+                    try self.emitText(html[start..consumed], tag);
                     start = consumed;
                 }
             }
 
-            try self.emitText(html[start..consumed], tag, null);
-            return html.len;
+            try self.emitText(html[start..consumed], tag);
+            return .{ .consumed = html.len };
         }
 
-        // Helper function for handling whitespace. In preformatted
-        // text the first \r or \n is skipped.
-        fn handleWhitespaceChar(
-            self: *Self,
-            c: u8,
-            start: *usize,
-            html: []const u8,
-            end: usize,
-            tag: ?Tag,
-        ) Error!void {
+        fn handleWhitespace(self: *Self, whitespace: u8) Error!void {
             if (self.preformatted_depth == 0) {
-                try self.emitText(html[start.*..end], tag, null);
-                start.* = end + 1;
-                // When last processed tag was br and it inserted a new line,
-                // we do not queue a new space.
-                if (!self.last_br) try self.queueWhitespace(.space);
+                if (!self.last_br and self.ignore_depth == 0)
+                    try self.queueWhitespace(.space);
+                return;
+            }
+
+            if (self.preformatted_first) {
+                self.preformatted_first = false;
+                if (whitespace != '\n' and whitespace != '\r' and self.ignore_depth == 0)
+                    try self.out_writer.writeByte(whitespace);
             } else {
-                if (self.preformatted_first) {
-                    self.preformatted_first = false;
-                    if (c == '\n' or c == '\r') start.* += 1;
-                } else {
-                    // preformatted mode turns \r to \n.
-                    const c_out = if (c == '\r') '\n' else c;
-                    try self.emitText(html[start.*..end], tag, null);
-                    if (self.ignore_depth == 0) try self.out_writer.writeByte(c_out);
-                    start.* = end + 1;
-                }
+                const c_out = if (whitespace == '\r') '\n' else whitespace;
+                if (self.ignore_depth == 0)
+                    try self.out_writer.writeByte(c_out);
             }
         }
 
@@ -528,9 +587,8 @@ pub fn TextExtractor(T: type) type {
             self: *Self,
             text: []const u8,
             tag: ?Tag,
-            codepoints: ?[2]u21,
         ) Writer.Error!void {
-            if ((text.len == 0 and codepoints == null) or
+            if (text.len == 0 or
                 self.ignore_depth > 0 or
                 (tag != null and tag.? == .math))
             {
@@ -549,14 +607,45 @@ pub fn TextExtractor(T: type) type {
                 self.pending_whitespace = null;
             }
 
-            if (text.len > 0) try self.out_writer.writeAll(text);
-            if (codepoints) |cps| {
-                try self.out_writer.print("{u}", .{cps[0]});
-                if (cps[1] != 0) try self.out_writer.print("{u}", .{cps[1]});
-            }
-
+            try self.out_writer.writeAll(text);
             self.any_text = true;
             self.last_br = false;
+        }
+
+        fn handleDecoding(self: *Self, html: []const u8) Error!ParseStep {
+            const feed_res = self.decoder.feed(html);
+            if (feed_res.emit == null) {
+                return .{ .consumed = feed_res.consumed };
+            }
+
+            try self.emitDecoded(feed_res.emit.?);
+            self.state = State.text;
+            return .{ .consumed = feed_res.consumed };
+        }
+
+        fn emitDecoded(self: *Self, emit: decoding.EntityDecoder.Emit) !void {
+            const tag = self.stack.getLastOrNull();
+            if (emit.codepoints) |cps| {
+                if (cps[1] == 0 and cps[0] <= std.math.maxInt(u8) and
+                    ascii.isWhitespace(@intCast(cps[0])))
+                {
+                    try self.handleWhitespace(@intCast(cps[0]));
+                } else {
+                    var utf8enc: [8]u8 = undefined;
+                    // Our codepoints are valid from the decoder.
+                    var len = std.unicode.utf8Encode(cps[0], &utf8enc) catch unreachable;
+                    if (cps[1] != 0) {
+                        len += std.unicode.utf8Encode(cps[1], utf8enc[len..]) catch unreachable;
+                    }
+                    try self.emitText(utf8enc[0..len], tag);
+                }
+            } else {
+                // No codepoint therefore not a valid entity at all,
+                // we need to emit the & as literal.
+                try self.emitText("&", tag);
+            }
+
+            try self.emitText(emit.literal, tag);
         }
 
         //<p>ekdy...</p>
@@ -564,38 +653,80 @@ pub fn TextExtractor(T: type) type {
         //
         //<p>ekdy...</p>
         //           ^
-        fn handleTag(self: *Self, html: []const u8) Error!usize {
+        fn handleTag(self: *Self, html: []const u8) Error!ParseStep {
             const c = html[0];
             if (!is_valid_fs_tag_char(c)) {
                 try self.out_writer.writeByte('<');
                 self.state = State.text;
-                return 0;
+                return .{ .consumed = 0 };
             }
 
             if (c == '/') {
                 self.state = State.tag_end;
-                return 1;
+                return .{ .consumed = 1 };
             }
 
             self.state = State.tag_start;
-            return 0;
+            return .{ .consumed = 0 };
+        }
+
+        /// Result value to use when we try to do forward lookup on
+        /// the HTML buffer. Because we only have a chunk of HTML the
+        /// result might be inconclusive thereby we use partial.
+        const ForwardMatchResult = enum { full, partial, none };
+
+        fn forwardMatch(target: []const u8, html: []const u8) ForwardMatchResult {
+            const min_len = @min(target.len, html.len);
+            if (std.mem.eql(u8, target[0..min_len], html[0..min_len])) {
+                return if (target.len == min_len) .full else .partial;
+            }
+
+            return .none;
+        }
+
+        fn accumTagChar(self: *Self, c: u8) void {
+            if (self.tag_buffer_len < self.tag_buffer.len) {
+                self.tag_buffer[self.tag_buffer_len] = ascii.toLower(c);
+                self.tag_buffer_len += 1;
+            } else {
+                self.tag_buffer_overflow = true;
+            }
+        }
+
+        fn resolveTag(self: *Self) Tag {
+            if (self.tag_buffer_overflow) return Tag.unknown;
+            return tag_to_enum.get(self.tag_buffer[0..self.tag_buffer_len]) orelse Tag.unknown;
         }
 
         //<strong>ekdy...</strong>
         // ^~~~~
-        fn handleTagStart(self: *Self, allocator: Allocator, html: []const u8) Error!usize {
-            const c = html[0];
-            // Handle comments below
-            if (html.len > 2 and std.mem.eql(u8, html[0..3], "!--")) {
-                self.state = State.comment;
+        fn handleTagStart(self: *Self, allocator: Allocator, html: []const u8) Error!ParseStep {
+            // Handle comments below if tag has not started
+            if (self.tag_buffer_len == 0) {
+                const comment_match = forwardMatch("!--", html);
+                if (comment_match == .full) {
+                    self.state = State.comment;
 
-                // Do not consume all 3, because it can abruptly finish
-                // with: <!-->
-                return 1;
+                    // Do not consume all 3, because it can abruptly finish
+                    // with: <!-->
+                    return .{ .consumed = 1, .buffer_rest = false };
+                }
+
+                if (comment_match == .partial) {
+                    return .{ .consumed = 0, .buffer_rest = true };
+                }
             }
 
+            const c = html[0];
+
+            // Tag name ends in this block
             if (ascii.isWhitespace(c) or c == '>' or c == '/') {
-                var tag = tag_from_str(self.tag_buffer.items);
+                defer {
+                    self.tag_buffer_len = 0;
+                    self.tag_buffer_overflow = false;
+                }
+
+                var tag = self.resolveTag();
 
                 // frameset is special. Its only a valid tag if no
                 // text has been written before which in that case no
@@ -604,7 +735,7 @@ pub fn TextExtractor(T: type) type {
                 if (tag == .frameset) {
                     if (!self.any_text) {
                         self.state = .frameset;
-                        return html.len;
+                        return .{ .consumed = html.len };
                     }
                     tag = .unknown;
                 }
@@ -624,13 +755,12 @@ pub fn TextExtractor(T: type) type {
                     if (self.preformatted_depth == 1) self.preformatted_first = true;
                 }
 
-                self.tag_buffer.clearRetainingCapacity();
                 self.state = State.tag_start_found;
-                return if (ascii.isWhitespace(c)) 1 else 0;
+                return .{ .consumed = if (ascii.isWhitespace(c)) 1 else 0 };
             }
 
-            try self.tag_buffer.append(allocator, ascii.toLower(c));
-            return 1;
+            self.accumTagChar(c);
+            return .{ .consumed = 1 };
         }
 
         /// Queue whitespace if its rank is higher than the current pending.
@@ -645,7 +775,7 @@ pub fn TextExtractor(T: type) type {
 
         //<strong >ekdy...</strong>
         //       ^~
-        fn handleTagStartFound(self: *Self, html: []const u8) Error!usize {
+        fn handleTagStartFound(self: *Self, html: []const u8) Error!ParseStep {
             const tag = self.stack.getLast();
 
             if (@hasDecl(T, "onTagStart")) {
@@ -655,38 +785,38 @@ pub fn TextExtractor(T: type) type {
             }
 
             const c = html[0];
-            if (ascii.isWhitespace(c)) return 1;
+            if (ascii.isWhitespace(c)) return .{ .consumed = 1 };
             if (c == '/') {
                 self.state = State.tag_end_found;
-                return 1;
+                return .{ .consumed = 1 };
             }
 
             if (c == '>') {
                 if (tag_properties.get(tag).is_void) {
                     self.state = State.tag_end_found;
-                    return 0;
+                    return .{ .consumed = 0 };
                 }
 
                 self.state = if (tag == .script) State.script else State.text;
-                return 1;
+                return .{ .consumed = 1 };
             }
 
             self.attr_return_state = State.tag_start_found;
             self.state = State.attr_key;
-            return 0;
+            return .{ .consumed = 0 };
         }
 
         //<strong >ekdy...</strong>
         //                 ^
-        fn handleTagEnd(self: *Self, allocator: Allocator, html: []const u8) Error!usize {
+        fn handleTagEnd(self: *Self, html: []const u8) Error!ParseStep {
             const c = html[0];
             if (ascii.isWhitespace(c) or c == '>') {
                 self.state = State.tag_end_found;
-                return if (c == '>') 0 else 1;
+                return .{ .consumed = if (c == '>') 0 else 1 };
             }
 
-            try self.tag_buffer.append(allocator, ascii.toLower(c));
-            return 1;
+            self.accumTagChar(c);
+            return .{ .consumed = 1 };
         }
 
         fn popUntilMatching(self: *Self, end_tag: Tag) bool {
@@ -714,28 +844,32 @@ pub fn TextExtractor(T: type) type {
 
         //<strong >ekdy...</strong >
         //                        ^~
-        fn handleTagEndFound(self: *Self, html: []const u8) Error!usize {
+        fn handleTagEndFound(self: *Self, html: []const u8) Error!ParseStep {
             const c = html[0];
 
-            if (ascii.isWhitespace(c)) return 1;
+            if (ascii.isWhitespace(c)) return .{ .consumed = 1 };
 
             if (c != '>') {
                 self.attr_return_state = .tag_end_found;
                 self.state = .attr_key;
-                return 0;
+                return .{ .consumed = 0 };
             }
 
-            defer self.tag_buffer.clearRetainingCapacity();
+            defer {
+                self.tag_buffer_len = 0;
+                self.tag_buffer_overflow = false;
+            }
+
             if (self.stack.getLastOrNull()) |tag| {
                 // plaintext is a special tag.
                 if (tag == .plaintext) {
                     self.state = .plaintext;
-                    return 1;
+                    return .{ .consumed = 1 };
                 }
 
                 // Non void tag, or tag that does not end with /.
-                if (self.tag_buffer.items.len > 0) {
-                    const end_tag = tag_from_str(self.tag_buffer.items);
+                if (self.tag_buffer_len > 0) {
+                    const end_tag = self.resolveTag();
                     const match = self.popUntilMatching(end_tag);
                     if (@hasDecl(T, "onTagEnd")) {
                         const ws = try self.policy.onTagEnd(
@@ -753,7 +887,7 @@ pub fn TextExtractor(T: type) type {
             }
 
             self.state = State.text;
-            return 1;
+            return .{ .consumed = 1 };
         }
 
         fn switchAttrEndState(self: *Self) void {
@@ -763,24 +897,24 @@ pub fn TextExtractor(T: type) type {
 
         //<a href="http://...">ekdy</a>
         //   ^~~~
-        fn handleAttrKey(self: *Self, html: []const u8) Error!usize {
+        fn handleAttrKey(self: *Self, html: []const u8) Error!ParseStep {
             const c = html[0];
             if (c == '=') {
                 self.state = State.attr_val;
-                return 1;
+                return .{ .consumed = 1 };
             }
 
             if (c == '>') {
                 self.switchAttrEndState();
-                return 0;
+                return .{ .consumed = 0 };
             }
 
-            return 1;
+            return .{ .consumed = 1 };
         }
 
         //<a href="http://...">ekdy</a>
         //        ^~~~~~~~~~~~
-        fn handleAttrVal(self: *Self, html: []const u8) Error!usize {
+        fn handleAttrVal(self: *Self, html: []const u8) Error!ParseStep {
             const c = html[0];
             if (self.attr_val_quote) |qc| {
                 if (c == qc) {
@@ -800,34 +934,44 @@ pub fn TextExtractor(T: type) type {
                 } else if (c == '>') {
                     self.attr_val_start = false;
                     self.switchAttrEndState();
-                    return 0;
+                    return .{ .consumed = 0 };
                 } else {
                     self.attr_val_start = true;
                 }
             }
 
-            return 1;
+            return .{ .consumed = 1 };
         }
 
         //<!-- ekdy -->
         //    ^~~~~~
-        fn handleComment(self: *Self, html: []const u8) Error!usize {
-            if (html.len > 2 and std.mem.eql(u8, html[0..3], "-->")) {
+        fn handleComment(self: *Self, html: []const u8) Error!ParseStep {
+            const cm = forwardMatch("-->", html);
+            if (cm == .full) {
                 self.state = State.text;
-                return 3;
+                return .{ .consumed = 3 };
             }
 
-            if (html.len > 3 and std.mem.eql(u8, html[0..4], "--!>")) {
-                self.state = State.text;
-                return 4;
+            if (cm == .partial) {
+                return .{ .consumed = 0, .buffer_rest = true };
             }
 
-            return 1;
+            const cm2 = forwardMatch("--!>", html);
+            if (cm2 == .full) {
+                self.state = State.text;
+                return .{ .consumed = 4 };
+            }
+
+            if (cm2 == .partial) {
+                return .{ .consumed = 0, .buffer_rest = true };
+            }
+
+            return .{ .consumed = 1 };
         }
 
         //<plaintext>ekdy...
         //           ^~~~~~~
-        fn handlePlaintext(self: *Self, html: []const u8) Error!usize {
+        fn handlePlaintext(self: *Self, html: []const u8) Error!ParseStep {
             // In plaintext null bytes are printed as invalid as
             // opposed to normal text mode where they are ignored.
             for (html) |c| {
@@ -838,10 +982,10 @@ pub fn TextExtractor(T: type) type {
                 }
             }
 
-            return html.len;
+            return .{ .consumed = html.len };
         }
 
-        // Check if given tag prefix is proper tag. For example if
+        // Check if given tag prefix is properly matched. For example if
         // '</script' is given will try to match a proper </script> tag by
         // relying to the rules of script tag matching (whitespace etc.). If
         // there is no match will return 0, otherwise will return number
@@ -853,24 +997,30 @@ pub fn TextExtractor(T: type) type {
             self: *Self,
             html: []const u8,
             comptime tag_prefix: []const u8,
-        ) Error!usize {
-            if (html.len < tag_prefix.len + 1)
-                return 0;
-
+        ) Error!?ParseStep {
             var lowercase_buf: [tag_prefix.len]u8 = undefined;
-            const lowercase = ascii.lowerString(&lowercase_buf, html[0..tag_prefix.len]);
-            if (!std.mem.eql(u8, lowercase, tag_prefix))
-                return 0;
+            const lc_html = ascii.lowerString(
+                &lowercase_buf,
+                html[0..@min(tag_prefix.len, html.len)],
+            );
+            const fw_match = forwardMatch(tag_prefix, lc_html);
+            if (fw_match == .none) {
+                return null;
+            }
+
+            if (fw_match == .partial) {
+                return .{ .consumed = 0, .buffer_rest = true };
+            }
 
             var script_match = false;
             var sub_cursor = tag_prefix.len;
             while (sub_cursor < html.len) {
                 const c = html[sub_cursor];
                 if (c == '>')
-                    return sub_cursor + 1;
+                    return .{ .consumed = sub_cursor + 1 };
 
                 if (!ascii.isWhitespace(c) and c != '/') {
-                    if (!script_match) return 0;
+                    if (!script_match) return null;
 
                     // Some attribute is starting here. Save the
                     // current state to attr_return_state so we don't
@@ -878,28 +1028,43 @@ pub fn TextExtractor(T: type) type {
                     self.attr_return_state = self.state;
                     const orig_state = self.state;
                     self.state = .attr_key;
+
+                    // In streaming attribute may not fully processed
+                    // therefore we need to guarantee the original
+                    // state is restored.
+                    defer self.state = orig_state;
+
                     while (sub_cursor < html.len and self.state != orig_state) {
-                        sub_cursor += try switch (self.state) {
+                        const sub_step_res = try switch (self.state) {
                             .attr_key => self.handleAttrKey(html[sub_cursor..]),
                             .attr_val => self.handleAttrVal(html[sub_cursor..]),
                             else => {
                                 unreachable;
                             },
                         };
+                        sub_cursor += sub_step_res.consumed;
+                        if (sub_step_res.buffer_rest) {
+                            unreachable;
+                        }
                     }
                 } else {
                     sub_cursor += 1;
                     // In below states the final > is not required for tag start or end.
                     // Simply either ascii whitespace or / can end the tag.
                     if (self.state == .script_escaped or self.state == .script_double_escaped)
-                        return sub_cursor;
+                        return .{ .consumed = sub_cursor };
 
                     script_match = true;
                 }
             }
 
-            // Consumed everything
-            return 0;
+            // Consumed everything without resolving. This case
+            // requires setting the following back to their original
+            // values as we might be required to finish in the middle
+            // of attribute parsing.
+            self.attr_val_quote = null;
+            self.attr_val_start = false;
+            return .{ .consumed = 0, .buffer_rest = true };
         }
 
         // Handle exit from a script tag here.
@@ -917,92 +1082,124 @@ pub fn TextExtractor(T: type) type {
         //         ^~~~~~~
         // FIXME: This part cannot be simply converted to SIMD.
         // for SIMD we need to first look for a '<' match.
-        fn handleScript(self: *Self, html: []const u8) Error!usize {
-            const check_adv = try self.tagMatchScriptMode(html, "</script");
-            if (check_adv > 0) {
-                self.endScript();
-                return check_adv;
+        fn handleScript(self: *Self, html: []const u8) Error!ParseStep {
+            if (try self.tagMatchScriptMode(html, "</script")) |m| {
+                if (!m.buffer_rest)
+                    self.endScript();
+
+                return m;
             }
 
             const escape_tok = "<!--";
-            if (escape_tok.len <= html.len and
-                std.mem.eql(u8, html[0..escape_tok.len], escape_tok))
-            {
-                self.state = .script_escaped;
-                return escape_tok.len;
-            }
-
-            return 1;
+            return switch (forwardMatch(escape_tok, html)) {
+                .none => .{ .consumed = 1 },
+                .partial => .{ .consumed = 0, .buffer_rest = true },
+                .full => blk: {
+                    self.state = .script_escaped;
+                    break :blk .{ .consumed = escape_tok.len };
+                },
+            };
         }
 
         // <script>ekdy <!-- ekdy....
         //                  ^~~~~~~~~
-        fn handleScriptEscaped(self: *Self, html: []const u8) Error!usize {
+        fn handleScriptEscaped(self: *Self, html: []const u8) Error!ParseStep {
             const esc_end_tok = "-->";
-            if (html.len < esc_end_tok.len)
-                return html.len;
-
-            if (std.mem.eql(u8, html[0..esc_end_tok.len], esc_end_tok)) {
+            const esc_end_m = forwardMatch(esc_end_tok, html);
+            if (esc_end_m == .full) {
                 self.state = .script;
-                return esc_end_tok.len;
+                return .{ .consumed = esc_end_tok.len };
             }
 
-            const start_adv = try self.tagMatchScriptMode(html, "<script");
-            if (start_adv > 0) {
-                self.state = .script_double_escaped;
-                return start_adv;
+            if (esc_end_m == .partial) {
+                return .{ .consumed = 0, .buffer_rest = true };
             }
 
-            const end_adv = try self.tagMatchScriptMode(html, "</script");
-            if (end_adv > 0) {
-                self.endScript();
-                return end_adv;
+            if (try self.tagMatchScriptMode(html, "<script")) |m| {
+                if (!m.buffer_rest)
+                    self.state = .script_double_escaped;
+
+                return m;
             }
 
-            return 1;
+            if (try self.tagMatchScriptMode(html, "</script")) |m| {
+                if (!m.buffer_rest)
+                    self.endScript();
+
+                return m;
+            }
+
+            return .{ .consumed = 1 };
         }
 
         // <script>ekdy <!-- ... <script> ekdy...
         //                               ^~~~~~~~
-        fn handleScriptDoubleEscaped(self: *Self, html: []const u8) Error!usize {
+        fn handleScriptDoubleEscaped(self: *Self, html: []const u8) Error!ParseStep {
             const esc_end_tok = "-->";
-            if (html.len < esc_end_tok.len)
-                return html.len;
-
-            if (std.mem.eql(u8, html[0..esc_end_tok.len], esc_end_tok)) {
+            const esc_end_m = forwardMatch(esc_end_tok, html);
+            if (esc_end_m == .full) {
                 self.state = .script;
-                return esc_end_tok.len;
+                return .{ .consumed = esc_end_tok.len };
             }
 
-            const end_adv = try self.tagMatchScriptMode(html, "</script");
-            if (end_adv > 0) {
-                self.state = .script_escaped;
-                return end_adv;
+            if (esc_end_m == .partial) {
+                return .{ .consumed = 0, .buffer_rest = true };
             }
 
-            return 1;
+            if (try self.tagMatchScriptMode(html, "</script")) |m| {
+                if (!m.buffer_rest)
+                    self.state = .script_escaped;
+
+                return m;
+            }
+
+            return .{ .consumed = 1 };
         }
 
-        fn handleFrameSet(self: *Self, html: []const u8) Error!usize {
+        fn handleFrameSet(self: *Self, html: []const u8) Error!ParseStep {
             _ = self;
-            return html.len;
+            return .{ .consumed = html.len };
         }
     };
 }
 
 const talloc = std.testing.allocator;
 
-/// Check if html to text works as expected.
+/// Check if html to text works as expected both as a single and
+/// streaming payload.
 fn expectConvert(expected: []const u8, html_text: []const u8) !void {
     var allocating = std.Io.Writer.Allocating.init(talloc);
     defer allocating.deinit();
     const InnerText = @import("policy/InnerText.zig");
     var policy = InnerText{};
-    var extractor = try TextExtractor(InnerText).init(talloc, &allocating.writer, &policy);
+    const InnerTextExtractor = TextExtractor(InnerText);
+    var extractor = try InnerTextExtractor.init(&allocating.writer, &policy);
     defer extractor.deinit(talloc);
-    try extractor.convert(talloc, html_text);
-    try extractor.eos();
-    try std.testing.expectEqualStrings(expected, allocating.written());
+
+    // Check as a single payload.
+    try extractor.feed(talloc, html_text);
+    try extractor.finish();
+    const single_shot_res = std.testing.expectEqualStrings(expected, allocating.written());
+
+    allocating.clearRetainingCapacity();
+    var stream_extractor = try InnerTextExtractor.init(&allocating.writer, &policy);
+    defer stream_extractor.deinit(talloc);
+
+    // Check streaming 1 character at a time.
+    for (html_text) |c| {
+        try stream_extractor.feed(talloc, (&c)[0..1]);
+    }
+    try stream_extractor.finish();
+    const stream_res = std.testing.expectEqualStrings(expected, allocating.written());
+    single_shot_res catch {
+        std.debug.print("single-shot failed on input: {s}\n", .{html_text});
+    };
+
+    stream_res catch {
+        std.debug.print("streaming failed on input: {s}\n", .{html_text});
+    };
+    try single_shot_res;
+    try stream_res;
 }
 
 test "paragraph_single" {
@@ -1120,6 +1317,10 @@ test "tag_end_bogus_attribute" {
     try expectConvert("abc", "<i>abc</i a=\">\">");
 }
 
+test "tag_buffer_overflow" {
+    try expectConvert("abc\n\nxyz", "<" ++ "x" ** 100 ++ ">abc</" ++ "y" ** 200 ++ "><p>xyz</p>");
+}
+
 fn expectConvertFile(comptime file_base: []const u8) !void {
     const src_dir = fs.path.dirname(@src().file) orelse "";
     const resource_dir = try fs.path.join(
@@ -1193,6 +1394,7 @@ fn expectHTML5CheckHelper(
         deviation_index.* += 1;
     }
 
+    // std.debug.print("running on={s}\n", .{html_da.items});
     expectConvert(exp, html_da.items) catch |terr| {
         std.debug.print("failed test_id={} on '{s}'\n", .{
             test_id,
