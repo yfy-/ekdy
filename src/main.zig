@@ -18,8 +18,8 @@ pub fn main(init: std.process.Init) !void {
     const stdin = &stdin_reader.interface;
     const stdout = &stdout_writer.interface;
 
-    var policy = InnerText{};
-    var extractor = try ekdy.html.TextExtractor(InnerText).init(stdout, &policy);
+    var policy = InnerText{ .writer = stdout };
+    var extractor = try ekdy.html.TextExtractor(InnerText).init(&policy);
     defer extractor.deinit(allocator);
 
     while (stdin.fillMore()) {

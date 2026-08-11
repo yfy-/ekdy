@@ -226,34 +226,23 @@ pub const default_tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.
     .source = .{ .is_void = true },
     .track = .{ .is_void = true },
     .wbr = .{ .is_void = true },
-    .audio = .{ .is_ignore = true },
-    .canvas = .{ .is_ignore = true },
-    .datalist = .{ .is_ignore = true },
-    .fencedframe = .{ .is_ignore = true },
-    .frameset = .{ .is_ignore = true },
-    .iframe = .{ .is_ignore = true, .is_rawtext = true },
-    .map = .{ .is_ignore = true },
-    .annotation = .{ .is_ignore = true },
-    .@"annotation-xml" = .{ .is_ignore = true },
-    .noembed = .{ .is_ignore = true, .is_rawtext = true },
-    .noframes = .{ .is_ignore = true, .is_rawtext = true },
+    .iframe = .{ .is_rawtext = true },
+    .noembed = .{ .is_rawtext = true },
+    .noframes = .{ .is_rawtext = true },
 
     // ekdy should act as if JS is disabled, therefore we treat
     // noscript and object as inline tags.
     // .noscript = .{ .is_ignore = true, .is_rawtext = true },
     // .object = .{ .is_ignore = true },
-    .picture = .{ .is_ignore = true },
+
     .script = .{ .is_ignore = true, .is_rawtext = true },
     .style = .{ .is_ignore = true, .is_rawtext = true },
-    .svg = .{ .is_ignore = true },
     .template = .{ .is_ignore = true },
-    .video = .{ .is_ignore = true },
     .plaintext = .{ .is_rawtext = true, .is_void = true },
     .textarea = .{ .is_rcdata = true, .is_preformatted = true },
-    .title = .{ .is_rcdata = true, .is_ignore = true },
+    .title = .{ .is_rcdata = true },
     .xmp = .{ .is_rawtext = true, .is_preformatted = true },
     .pre = .{ .is_preformatted = true },
-    .rp = .{ .is_ignore = true },
 });
 
 pub const tag_to_enum = std.StaticStringMap(Tag).initComptime(blk: {
@@ -280,6 +269,10 @@ pub fn is_valid_fs_tag_char(c: u8) bool {
 }
 
 pub fn TextExtractor(T: type) type {
+    if (!@hasDecl(T, "onText")) {
+        @compileError("policy must have onText implemented.");
+    }
+
     return struct {
         const Self = @This();
         const tag_properties = initTagProps();
@@ -290,7 +283,7 @@ pub fn TextExtractor(T: type) type {
         /// Whitespace type to emit.
         pending_whitespace: ?Whitespace = null,
 
-        /// Flag to indicate last written character is a <br>.
+        /// Flag to check if we last emitted <br>.
         last_br: bool = false,
 
         /// Flag to check if we have emitted any text.
@@ -319,9 +312,6 @@ pub fn TextExtractor(T: type) type {
 
         /// Depth of tags that output preformatted text.
         preformatted_depth: usize = 0,
-
-        /// Output writer.
-        out_writer: *Writer,
 
         stack: ArrayList(Tag) = ArrayList(Tag).empty,
 
@@ -364,23 +354,22 @@ pub fn TextExtractor(T: type) type {
             frameset,
         };
 
-        // Initialize tag properties by respecting the overrides
-        // provided by the policy type.
+        // Initialize tag properties by respecting the additional
+        // ignored tags.
         fn initTagProps() std.EnumArray(Tag, TagProperty) {
             var props = default_tag_properties;
-            if (!@hasDecl(T, "tag_property_overrides"))
+            if (!@hasDecl(T, "ignored_tags"))
                 return props;
 
-            for (&T.tag_property_overrides) |tp| {
-                props.set(tp.@"0", tp.@"1");
+            for (&T.ignored_tags) |it| {
+                props.getPtr(it).is_ignore = true;
             }
 
             return props;
         }
 
-        pub fn init(out_writer: *Writer, policy: *T) !Self {
+        pub fn init(policy: *T) !Self {
             return Self{
-                .out_writer = out_writer,
                 .policy = policy,
             };
         }
@@ -575,11 +564,11 @@ pub fn TextExtractor(T: type) type {
             if (self.preformatted_first) {
                 self.preformatted_first = false;
                 if (whitespace != '\n' and whitespace != '\r' and self.ignore_depth == 0)
-                    try self.out_writer.writeByte(whitespace);
+                    try self.policy.onText((&whitespace)[0..1]);
             } else {
                 const c_out = if (whitespace == '\r') '\n' else whitespace;
                 if (self.ignore_depth == 0)
-                    try self.out_writer.writeByte(c_out);
+                    try self.policy.onText((&c_out)[0..1]);
             }
         }
 
@@ -602,12 +591,12 @@ pub fn TextExtractor(T: type) type {
                         .single_break => "\n",
                         .double_break => "\n\n",
                     };
-                    try self.out_writer.writeAll(ws);
+                    try self.policy.onText(ws);
                 }
                 self.pending_whitespace = null;
             }
 
-            try self.out_writer.writeAll(text);
+            try self.policy.onText(text);
             self.any_text = true;
             self.last_br = false;
         }
@@ -656,7 +645,7 @@ pub fn TextExtractor(T: type) type {
         fn handleTag(self: *Self, html: []const u8) Error!ParseStep {
             const c = html[0];
             if (!is_valid_fs_tag_char(c)) {
-                try self.out_writer.writeByte('<');
+                try self.policy.onText("<");
                 self.state = State.text;
                 return .{ .consumed = 0 };
             }
@@ -742,7 +731,7 @@ pub fn TextExtractor(T: type) type {
 
                 // br is forced line break..
                 if (tag == .br) {
-                    try self.out_writer.writeByte('\n');
+                    try self.policy.onText("\n");
                     self.last_br = true;
                 }
 
@@ -779,7 +768,7 @@ pub fn TextExtractor(T: type) type {
             const tag = self.stack.getLast();
 
             if (@hasDecl(T, "onTagStart")) {
-                if (try self.policy.onTagStart(tag, self.out_writer)) |ws| {
+                if (try self.policy.onTagStart(tag, self.ignore_depth > 0)) |ws| {
                     try self.queueWhitespace(ws);
                 }
             }
@@ -872,10 +861,7 @@ pub fn TextExtractor(T: type) type {
                     const end_tag = self.resolveTag();
                     const match = self.popUntilMatching(end_tag);
                     if (@hasDecl(T, "onTagEnd")) {
-                        const ws = try self.policy.onTagEnd(
-                            end_tag,
-                            self.out_writer,
-                        );
+                        const ws = try self.policy.onTagEnd(end_tag, self.ignore_depth > 0);
                         if (ws != null and match) {
                             try self.queueWhitespace(ws.?);
                         }
@@ -974,14 +960,21 @@ pub fn TextExtractor(T: type) type {
         fn handlePlaintext(self: *Self, html: []const u8) Error!ParseStep {
             // In plaintext null bytes are printed as invalid as
             // opposed to normal text mode where they are ignored.
-            for (html) |c| {
+            var inv_str: [8]u8 = undefined;
+            const len = std.unicode.utf8Encode(
+                decoding.html_unicode_invalid,
+                &inv_str,
+            ) catch unreachable;
+            var last_valid_idx: usize = 0;
+            for (html, 0..) |c, i| {
                 if (c == 0) {
-                    try self.out_writer.print("{u}", .{decoding.html_unicode_invalid});
-                } else {
-                    try self.out_writer.writeByte(c);
+                    try self.policy.onText(html[last_valid_idx..i]);
+                    try self.policy.onText(inv_str[0..len]);
+                    last_valid_idx = i + 1;
                 }
             }
 
+            try self.policy.onText(html[last_valid_idx..]);
             return .{ .consumed = html.len };
         }
 
@@ -1086,7 +1079,7 @@ pub fn TextExtractor(T: type) type {
             // lowercase the `html` which is extremely slow as it is
             // done on every character.
             if (html[0] != '<')
-                return .{.consumed = 1};
+                return .{ .consumed = 1 };
 
             if (try self.tagMatchScriptMode(html, "</script")) |m| {
                 if (!m.buffer_rest)
@@ -1176,9 +1169,9 @@ fn expectConvert(expected: []const u8, html_text: []const u8) !void {
     var allocating = std.Io.Writer.Allocating.init(talloc);
     defer allocating.deinit();
     const InnerText = @import("policy/InnerText.zig");
-    var policy = InnerText{};
+    var policy = InnerText{ .writer = &allocating.writer };
     const InnerTextExtractor = TextExtractor(InnerText);
-    var extractor = try InnerTextExtractor.init(&allocating.writer, &policy);
+    var extractor = try InnerTextExtractor.init(&policy);
     defer extractor.deinit(talloc);
 
     // Check as a single payload.
@@ -1187,7 +1180,7 @@ fn expectConvert(expected: []const u8, html_text: []const u8) !void {
     const single_shot_res = std.testing.expectEqualStrings(expected, allocating.written());
 
     allocating.clearRetainingCapacity();
-    var stream_extractor = try InnerTextExtractor.init(&allocating.writer, &policy);
+    var stream_extractor = try InnerTextExtractor.init(&policy);
     defer stream_extractor.deinit(talloc);
 
     // Check streaming 1 character at a time.

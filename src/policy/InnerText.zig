@@ -110,31 +110,28 @@ const tag_end_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .pre = .single_break,
 });
 
-// Tag properties is an array of tuples where each tuple is a tag and
-// its property.
-pub const tag_property_overrides = [_]struct { html.Tag, html.TagProperty }{.{
-    .textarea, ta: {
-        // Just mark <textarea> as ignore, reserving other default properties.
-        var def_ta = html.default_tag_properties.get(.textarea);
-        def_ta.is_ignore = true;
-        break :ta def_ta;
-    },
-}};
+pub const ignored_tags = [_]html.Tag{
+    .audio,             .canvas,  .datalist, .fencedframe, .frameset, .iframe, .map,      .annotation,
+    .@"annotation-xml", .noembed, .noframes, .picture,     .svg,      .video,  .textarea, .title,
+    .rp,
+};
 
 const Self = @This();
 
-pub fn onTagStart(self: *Self, tag: html.Tag, writer: *std.Io.Writer) !?html.Whitespace {
+writer: *std.Io.Writer,
+
+pub fn onTagStart(self: *Self, tag: html.Tag, ignore: bool) !?html.Whitespace {
     _ = self;
-    _ = writer;
+    _ = ignore;
     return tag_start_whitespaces.get(tag);
 }
 
-pub fn onTagEnd(
-    self: *Self,
-    end_tag: html.Tag,
-    writer: *std.Io.Writer,
-) !?html.Whitespace {
+pub fn onTagEnd(self: *Self, end_tag: html.Tag, ignore: bool) !?html.Whitespace {
     _ = self;
-    _ = writer;
+    _ = ignore;
     return tag_end_whitespaces.get(end_tag);
+}
+
+pub fn onText(self: *Self, text: []const u8) !void {
+    try self.writer.writeAll(text);
 }
