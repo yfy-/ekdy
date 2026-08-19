@@ -116,22 +116,25 @@ pub const ignored_tags = [_]html.Tag{
     .rp,
 };
 
+const Writer = std.Io.Writer;
+pub const Error = Writer.Error;
+
 const Self = @This();
 
-writer: *std.Io.Writer,
+writer: *Writer,
 
-pub fn onTagStart(self: *Self, tag: html.Tag, ignore: bool) !?html.Whitespace {
+pub fn onTagStart(self: *Self, tag: html.Tag, ignore: bool) Error!?html.Whitespace {
     _ = self;
     _ = ignore;
     return tag_start_whitespaces.get(tag);
 }
 
-pub fn onTagEnd(self: *Self, end_tag: html.Tag, ignore: bool) !?html.Whitespace {
+pub fn onTagEnd(self: *Self, end_tag: html.Tag, ignore: bool) Error!?html.Whitespace {
     _ = self;
     _ = ignore;
     return tag_end_whitespaces.get(end_tag);
 }
 
-pub fn onText(self: *Self, text: []const u8) !void {
+pub fn onText(self: *Self, text: []const u8) Error!void {
     try self.writer.writeAll(text);
 }

@@ -7,8 +7,6 @@ const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 
-pub const Error = Allocator.Error || Writer.Error;
-
 pub const Tag = enum(u8) {
     // Unknown tags
     unknown,
@@ -276,6 +274,7 @@ pub fn TextExtractor(T: type) type {
     return struct {
         const Self = @This();
         const tag_properties = initTagProps();
+        const Error = Allocator.Error || T.Error;
 
         // Maximum size to copy from current html chunk to residual.
         const max_refill_size = 32;
@@ -368,7 +367,7 @@ pub fn TextExtractor(T: type) type {
             return props;
         }
 
-        pub fn init(policy: *T) !Self {
+        pub fn init(policy: *T) Self {
             return Self{
                 .policy = policy,
             };
@@ -384,24 +383,24 @@ pub fn TextExtractor(T: type) type {
             buffer_rest: bool = false,
         };
 
-        pub fn feedAll(self: *Self, allocator: Allocator, html: []const u8) !void {
+        pub fn feedAll(self: *Self, allocator: Allocator, html: []const u8) Error!void {
             try self.feed(allocator, html);
             try self.finish();
         }
 
-        inline fn step(self: *Self, allocator: Allocator, html: []const u8) !ParseStep {
-            return try switch (self.state) {
-                .text => self.handleText(html),
-                .decoding => self.handleDecoding(html),
-                .tag => self.handleTag(html),
-                .tag_start => self.handleTagStart(allocator, html),
-                .tag_start_found => self.handleTagStartFound(html),
+        inline fn step(self: *Self, allocator: Allocator, html: []const u8) Error!ParseStep {
+            return switch (self.state) {
+                .text => try self.handleText(html),
+                .decoding => try self.handleDecoding(html),
+                .tag => try self.handleTag(html),
+                .tag_start => try self.handleTagStart(allocator, html),
+                .tag_start_found => try self.handleTagStartFound(html),
                 .tag_end => self.handleTagEnd(html),
-                .tag_end_found => self.handleTagEndFound(html),
+                .tag_end_found => try self.handleTagEndFound(html),
                 .attr_key => self.handleAttrKey(html),
                 .attr_val => self.handleAttrVal(html),
                 .comment => self.handleComment(html),
-                .plaintext => self.handlePlaintext(html),
+                .plaintext => try self.handlePlaintext(html),
                 .script => self.handleScript(html),
                 .script_escaped => self.handleScriptEscaped(html),
                 .script_double_escaped => self.handleScriptDoubleEscaped(html),
@@ -416,7 +415,7 @@ pub fn TextExtractor(T: type) type {
             self: *Self,
             allocator: Allocator,
             html: []const u8,
-        ) !void {
+        ) Error!void {
             // Cursor should always reset after this because we always fully use html.
             defer self.cursor = 0;
 
@@ -461,7 +460,7 @@ pub fn TextExtractor(T: type) type {
 
         /// Writes any text remaining. Should be called after all html
         /// chunks are fed.
-        pub fn finish(self: *Self) !void {
+        pub fn finish(self: *Self) T.Error!void {
             switch (self.state) {
                 .tag => {
                     try self.emitText("<", self.stack.getLastOrNull());
@@ -499,7 +498,7 @@ pub fn TextExtractor(T: type) type {
         fn handleText(
             self: *Self,
             html: []const u8,
-        ) Error!ParseStep {
+        ) T.Error!ParseStep {
             const tag = self.stack.getLastOrNull();
             const tag_prop = if (tag) |t| tag_properties.get(t) else null;
 
@@ -554,10 +553,10 @@ pub fn TextExtractor(T: type) type {
             return .{ .consumed = html.len };
         }
 
-        fn handleWhitespace(self: *Self, whitespace: u8) Error!void {
+        fn handleWhitespace(self: *Self, whitespace: u8) T.Error!void {
             if (self.preformatted_depth == 0) {
                 if (!self.last_br and self.ignore_depth == 0)
-                    try self.queueWhitespace(.space);
+                    self.queueWhitespace(.space);
                 return;
             }
 
@@ -576,7 +575,7 @@ pub fn TextExtractor(T: type) type {
             self: *Self,
             text: []const u8,
             tag: ?Tag,
-        ) Writer.Error!void {
+        ) T.Error!void {
             if (text.len == 0 or
                 self.ignore_depth > 0 or
                 (tag != null and tag.? == .math))
@@ -601,7 +600,7 @@ pub fn TextExtractor(T: type) type {
             self.last_br = false;
         }
 
-        fn handleDecoding(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleDecoding(self: *Self, html: []const u8) T.Error!ParseStep {
             const feed_res = self.decoder.feed(html);
             if (feed_res.emit == null) {
                 return .{ .consumed = feed_res.consumed };
@@ -612,7 +611,7 @@ pub fn TextExtractor(T: type) type {
             return .{ .consumed = feed_res.consumed };
         }
 
-        fn emitDecoded(self: *Self, emit: decoding.EntityDecoder.Emit) !void {
+        fn emitDecoded(self: *Self, emit: decoding.EntityDecoder.Emit) T.Error!void {
             const tag = self.stack.getLastOrNull();
             if (emit.codepoints) |cps| {
                 if (cps[1] == 0 and cps[0] <= std.math.maxInt(u8) and
@@ -642,7 +641,7 @@ pub fn TextExtractor(T: type) type {
         //
         //<p>ekdy...</p>
         //           ^
-        fn handleTag(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleTag(self: *Self, html: []const u8) T.Error!ParseStep {
             const c = html[0];
             if (!is_valid_fs_tag_char(c)) {
                 try self.policy.onText("<");
@@ -753,7 +752,7 @@ pub fn TextExtractor(T: type) type {
         }
 
         /// Queue whitespace if its rank is higher than the current pending.
-        fn queueWhitespace(self: *Self, ws: Whitespace) Error!void {
+        fn queueWhitespace(self: *Self, ws: Whitespace) void {
             if (!self.any_text) return;
             if (self.pending_whitespace) |*pw| {
                 pw.* = @enumFromInt(@max(@intFromEnum(pw.*), @intFromEnum(ws)));
@@ -764,12 +763,12 @@ pub fn TextExtractor(T: type) type {
 
         //<strong >ekdy...</strong>
         //       ^~
-        fn handleTagStartFound(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleTagStartFound(self: *Self, html: []const u8) T.Error!ParseStep {
             const tag = self.stack.getLast();
 
             if (@hasDecl(T, "onTagStart")) {
                 if (try self.policy.onTagStart(tag, self.ignore_depth > 0)) |ws| {
-                    try self.queueWhitespace(ws);
+                    self.queueWhitespace(ws);
                 }
             }
 
@@ -797,7 +796,7 @@ pub fn TextExtractor(T: type) type {
 
         //<strong >ekdy...</strong>
         //                 ^
-        fn handleTagEnd(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleTagEnd(self: *Self, html: []const u8) ParseStep {
             const c = html[0];
             if (ascii.isWhitespace(c) or c == '>') {
                 self.state = State.tag_end_found;
@@ -833,7 +832,7 @@ pub fn TextExtractor(T: type) type {
 
         //<strong >ekdy...</strong >
         //                        ^~
-        fn handleTagEndFound(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleTagEndFound(self: *Self, html: []const u8) T.Error!ParseStep {
             const c = html[0];
 
             if (ascii.isWhitespace(c)) return .{ .consumed = 1 };
@@ -863,7 +862,7 @@ pub fn TextExtractor(T: type) type {
                     if (@hasDecl(T, "onTagEnd")) {
                         const ws = try self.policy.onTagEnd(end_tag, self.ignore_depth > 0);
                         if (ws != null and match) {
-                            try self.queueWhitespace(ws.?);
+                            self.queueWhitespace(ws.?);
                         }
                     }
                 } else {
@@ -883,7 +882,7 @@ pub fn TextExtractor(T: type) type {
 
         //<a href="http://...">ekdy</a>
         //   ^~~~
-        fn handleAttrKey(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleAttrKey(self: *Self, html: []const u8) ParseStep {
             const c = html[0];
             if (c == '=') {
                 self.state = State.attr_val;
@@ -900,7 +899,7 @@ pub fn TextExtractor(T: type) type {
 
         //<a href="http://...">ekdy</a>
         //        ^~~~~~~~~~~~
-        fn handleAttrVal(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleAttrVal(self: *Self, html: []const u8) ParseStep {
             const c = html[0];
             if (self.attr_val_quote) |qc| {
                 if (c == qc) {
@@ -931,7 +930,7 @@ pub fn TextExtractor(T: type) type {
 
         //<!-- ekdy -->
         //    ^~~~~~
-        fn handleComment(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleComment(self: *Self, html: []const u8) ParseStep {
             const cm = forwardMatch("-->", html);
             if (cm == .full) {
                 self.state = State.text;
@@ -957,7 +956,7 @@ pub fn TextExtractor(T: type) type {
 
         //<plaintext>ekdy...
         //           ^~~~~~~
-        fn handlePlaintext(self: *Self, html: []const u8) Error!ParseStep {
+        fn handlePlaintext(self: *Self, html: []const u8) T.Error!ParseStep {
             // In plaintext null bytes are printed as invalid as
             // opposed to normal text mode where they are ignored.
             var inv_str: [8]u8 = undefined;
@@ -990,7 +989,7 @@ pub fn TextExtractor(T: type) type {
             self: *Self,
             html: []const u8,
             comptime tag_prefix: []const u8,
-        ) Error!?ParseStep {
+        ) ?ParseStep {
             var lowercase_buf: [tag_prefix.len]u8 = undefined;
             const lc_html = ascii.lowerString(
                 &lowercase_buf,
@@ -1028,7 +1027,7 @@ pub fn TextExtractor(T: type) type {
                     defer self.state = orig_state;
 
                     while (sub_cursor < html.len and self.state != orig_state) {
-                        const sub_step_res = try switch (self.state) {
+                        const sub_step_res = switch (self.state) {
                             .attr_key => self.handleAttrKey(html[sub_cursor..]),
                             .attr_val => self.handleAttrVal(html[sub_cursor..]),
                             else => {
@@ -1073,7 +1072,7 @@ pub fn TextExtractor(T: type) type {
 
         // <script>ekdy...</script>
         //         ^~~~~~~
-        fn handleScript(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleScript(self: *Self, html: []const u8) ParseStep {
             // NOTE: Fast path for script transition check. If we only
             // check below using `tagMatchScriptMode` we always
             // lowercase the `html` which is extremely slow as it is
@@ -1081,7 +1080,7 @@ pub fn TextExtractor(T: type) type {
             if (html[0] != '<')
                 return .{ .consumed = 1 };
 
-            if (try self.tagMatchScriptMode(html, "</script")) |m| {
+            if (self.tagMatchScriptMode(html, "</script")) |m| {
                 if (!m.buffer_rest)
                     self.endScript();
 
@@ -1101,7 +1100,7 @@ pub fn TextExtractor(T: type) type {
 
         // <script>ekdy <!-- ekdy....
         //                  ^~~~~~~~~
-        fn handleScriptEscaped(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleScriptEscaped(self: *Self, html: []const u8) ParseStep {
             const esc_end_tok = "-->";
             const esc_end_m = forwardMatch(esc_end_tok, html);
             if (esc_end_m == .full) {
@@ -1113,14 +1112,14 @@ pub fn TextExtractor(T: type) type {
                 return .{ .consumed = 0, .buffer_rest = true };
             }
 
-            if (try self.tagMatchScriptMode(html, "<script")) |m| {
+            if (self.tagMatchScriptMode(html, "<script")) |m| {
                 if (!m.buffer_rest)
                     self.state = .script_double_escaped;
 
                 return m;
             }
 
-            if (try self.tagMatchScriptMode(html, "</script")) |m| {
+            if (self.tagMatchScriptMode(html, "</script")) |m| {
                 if (!m.buffer_rest)
                     self.endScript();
 
@@ -1132,7 +1131,7 @@ pub fn TextExtractor(T: type) type {
 
         // <script>ekdy <!-- ... <script> ekdy...
         //                               ^~~~~~~~
-        fn handleScriptDoubleEscaped(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleScriptDoubleEscaped(self: *Self, html: []const u8) ParseStep {
             const esc_end_tok = "-->";
             const esc_end_m = forwardMatch(esc_end_tok, html);
             if (esc_end_m == .full) {
@@ -1144,7 +1143,7 @@ pub fn TextExtractor(T: type) type {
                 return .{ .consumed = 0, .buffer_rest = true };
             }
 
-            if (try self.tagMatchScriptMode(html, "</script")) |m| {
+            if (self.tagMatchScriptMode(html, "</script")) |m| {
                 if (!m.buffer_rest)
                     self.state = .script_escaped;
 
@@ -1154,7 +1153,7 @@ pub fn TextExtractor(T: type) type {
             return .{ .consumed = 1 };
         }
 
-        fn handleFrameSet(self: *Self, html: []const u8) Error!ParseStep {
+        fn handleFrameSet(self: *Self, html: []const u8) ParseStep {
             _ = self;
             return .{ .consumed = html.len };
         }
@@ -1171,7 +1170,7 @@ fn expectConvert(expected: []const u8, html_text: []const u8) !void {
     const InnerText = @import("policy/InnerText.zig");
     var policy = InnerText{ .writer = &allocating.writer };
     const InnerTextExtractor = TextExtractor(InnerText);
-    var extractor = try InnerTextExtractor.init(&policy);
+    var extractor = InnerTextExtractor.init(&policy);
     defer extractor.deinit(talloc);
 
     // Check as a single payload.
@@ -1180,7 +1179,7 @@ fn expectConvert(expected: []const u8, html_text: []const u8) !void {
     const single_shot_res = std.testing.expectEqualStrings(expected, allocating.written());
 
     allocating.clearRetainingCapacity();
-    var stream_extractor = try InnerTextExtractor.init(&policy);
+    var stream_extractor = InnerTextExtractor.init(&policy);
     defer stream_extractor.deinit(talloc);
 
     // Check streaming 1 character at a time.
@@ -1393,13 +1392,7 @@ fn expectHTML5CheckHelper(
     }
 
     // std.debug.print("running on={s}\n", .{html_da.items});
-    expectConvert(exp, html_da.items) catch |terr| {
-        std.debug.print("failed test_id={} on '{s}'\n", .{
-            test_id,
-            html_da.items,
-        });
-        return terr;
-    };
+    return expectConvert(exp, html_da.items);
 }
 
 /// Expect all tests in the html5lib ekdytest files pass with the
@@ -1435,6 +1428,8 @@ fn expectHTML5(
     var in_data = false;
     var test_id: u64 = 0;
     var deviation_i: u64 = 0;
+    var errors = ArrayList(anyerror!void).empty;
+    defer errors.deinit(talloc);
     while (reader.takeDelimiterInclusive('\n')) |line| {
         if (std.mem.eql(u8, line, "#data\n")) {
             in_data = true;
@@ -1445,13 +1440,19 @@ fn expectHTML5(
             defer html_da.clearRetainingCapacity();
             defer test_id += 1;
 
-            try expectHTML5CheckHelper(
+            expectHTML5CheckHelper(
                 &html_da,
                 &text_da,
                 &deviation_i,
                 deviations,
                 test_id,
-            );
+            ) catch |terr| {
+                std.debug.print("failed test_id={} on '{s}'\n", .{
+                    test_id,
+                    html_da.items,
+                });
+                try errors.append(talloc, terr);
+            };
         } else if (std.mem.eql(u8, line, "#text\n")) {
             in_data = false;
         } else if (in_data) {
@@ -1461,7 +1462,19 @@ fn expectHTML5(
         }
     } else |err| {
         if (err != error.EndOfStream) return err;
-        try expectHTML5CheckHelper(&html_da, &text_da, &deviation_i, deviations, test_id);
+        expectHTML5CheckHelper(
+            &html_da,
+            &text_da,
+            &deviation_i,
+            deviations,
+            test_id,
+        ) catch |terr| {
+            try errors.append(talloc, terr);
+        };
+    }
+
+    for (errors.items) |e| {
+        try e;
     }
 }
 
