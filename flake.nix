@@ -12,25 +12,32 @@
         pkgs = nixpkgs.legacyPackages.${system};
       in
       {
-        devShells.default = pkgs.mkShell {
-          packages =
-            with pkgs;
-            [
-              zig
-              zls
-              git
-              (python3.withPackages (ps: with ps; [
-                python-lsp-server
-              ]))
-            ]
-            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
-              (python3.withPackages (ps: with ps; [
+        devShells.default =
+          let
+            pythonEnv = pkgs.python3.withPackages (
+              ps:
+              with ps;
+              [ python-lsp-server ]
+              ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
                 websocket-client
-              ]))
-              chromium
-              parallel
-            ];
-        };
+              ]
+            );
+          in
+          pkgs.mkShell {
+            packages =
+              with pkgs;
+              [
+                zig
+                zls
+                git
+                nixfmt
+                pythonEnv
+              ]
+              ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+                chromium
+                parallel
+              ];
+          };
       }
     );
 }
