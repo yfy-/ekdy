@@ -26,9 +26,9 @@ const tag_start_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .option = .single_break,
     .summary = .single_break,
     .tbody = .single_break,
-    .tfoot = .single_break,
-    .th = .single_break,
-    .thead = .single_break,
+    // .tfoot = .single_break,
+    // .th = .single_break,
+    // .thead = .single_break,
     .address = .double_break,
     .article = .double_break,
     .aside = .double_break,
@@ -53,8 +53,8 @@ const tag_start_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .search = .double_break,
     .section = .double_break,
     .ul = .single_break,
-    .tr = .single_break,
-    .td = .single_break,
+    // .tr = .single_break,
+    // .td = .single_break,
     .pre = .single_break,
 });
 
@@ -79,9 +79,9 @@ const tag_end_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .option = .single_break,
     .summary = .single_break,
     .tbody = .single_break,
-    .tfoot = .single_break,
-    .th = .single_break,
-    .thead = .single_break,
+    // .tfoot = .single_break,
+    // .th = .single_break,
+    // .thead = .single_break,
     .address = .double_break,
     .article = .double_break,
     .aside = .double_break,
@@ -110,31 +110,54 @@ const tag_end_whitespaces = std.EnumMap(html.Tag, html.Whitespace).init(.{
     .pre = .single_break,
 });
 
-// Tag properties is an array of tuples where each tuple is a tag and
-// its property.
-pub const tag_property_overrides = [_]struct { html.Tag, html.TagProperty }{.{
-    .textarea, ta: {
-        // Just mark <textarea> as ignore, reserving other default properties.
-        var def_ta = html.default_tag_properties.get(.textarea);
-        def_ta.is_ignore = true;
-        break :ta def_ta;
-    },
-}};
+pub const ignored_tags = [_]html.Tag{
+    .audio,             .canvas,  .datalist, .fencedframe, .frameset, .iframe, .map,      .annotation,
+    .@"annotation-xml", .noembed, .noframes, .picture,     .svg,      .video,  .textarea, .title,
+    .rp,
+};
+
+const Writer = std.Io.Writer;
+pub const Error = Writer.Error;
 
 const Self = @This();
 
-pub fn onTagStart(self: *Self, tag: html.Tag, writer: *std.Io.Writer) !?html.Whitespace {
-    _ = self;
-    _ = writer;
+writer: *Writer,
+first_tr: bool = true,
+first_td_th: bool = true,
+
+pub fn onTagStart(self: *Self, tag: html.Tag, table_depth: usize) Error!?html.Whitespace {
+    // std.debug.print("TAG START: {}\n", .{tag});
+    if (table_depth == 0)
+        return tag_start_whitespaces.get(tag);
+
+    if (tag == .tr) {
+        if (self.first_tr) {
+            self.first_tr = false;
+        } else {
+            try self.writer.writeByte('\n');
+        }
+    } else if (tag == .td or tag == .th) {
+        if (self.first_td_th) {
+            self.first_td_th = false;
+        } else {
+            try self.writer.writeByte('\t');
+        }
+    }
+
     return tag_start_whitespaces.get(tag);
 }
 
-pub fn onTagEnd(
-    self: *Self,
-    end_tag: html.Tag,
-    writer: *std.Io.Writer,
-) !?html.Whitespace {
-    _ = self;
-    _ = writer;
+pub fn onTagEnd(self: *Self, end_tag: html.Tag, table_depth: usize) Error!?html.Whitespace {
+    // std.debug.print("TAG END: {}\n", .{end_tag});
+    if (end_tag == .table and table_depth < 2) {
+        self.first_tr = true;
+        self.first_td_th = true;
+    }
+
     return tag_end_whitespaces.get(end_tag);
+}
+
+pub fn onText(self: *Self, text: []const u8) Error!void {
+    // std.debug.print("OUTPUT: {s}\n", .{text});
+    try self.writer.writeAll(text);
 }
