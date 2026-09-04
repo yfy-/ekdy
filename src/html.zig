@@ -57,6 +57,7 @@ pub const Tag = enum(u8) {
     ol,
     p,
     pre,
+    listing,
     ul,
 
     // Inline text semantics
@@ -119,10 +120,10 @@ pub const Tag = enum(u8) {
     ins,
 
     // Table content
+    table,
     caption,
     col,
     colgroup,
-    table,
     tbody,
     td,
     tfoot,
@@ -181,10 +182,25 @@ pub const Tag = enum(u8) {
     tt,
     xmp,
 
-    // MathML tag
+    // MathML
+    mi,
+    mo,
+    mn,
+    ms,
+    mtext,
     annotation,
     @"annotation-xml",
-    mi,
+
+    // SVG
+    foreignObject,
+    desc,
+    svg_title,
+
+    // Uncategorized
+    applet,
+    basefont,
+    bgsound,
+    keygen,
 };
 
 /// Obtain Tag from string.
@@ -199,55 +215,159 @@ pub const Whitespace = enum(u2) {
     double_break,
 };
 
+pub const ContentType = enum(u2) {
+    normal,
+    rcdata,
+    rawtext,
+};
+
+pub const Namespace = enum(u2) {
+    html,
+    math,
+    svg,
+};
+
+pub const EndType = enum(u2) {
+    none,
+    implied,
+    thorough,
+};
+
 pub const TagProperty = packed struct {
-    is_void: bool = false,
-    is_ignore: bool = false,
-    is_rcdata: bool = false,
-    is_rawtext: bool = false,
-    is_preformatted: bool = false,
+    void: bool = false,
+    ignore: bool = false,
+    content_type: ContentType = .normal,
+    preformatted: bool = false,
+    end_type: EndType = .none,
+    closes_p: bool = false,
+    namespace: Namespace = .html,
+    scope_boundary: bool = false,
+    heading: bool = false,
+    special: bool = false,
 };
 
 pub const default_tag_properties = std.EnumArray(Tag, TagProperty).initDefault(.{}, .{
-    .area = .{ .is_void = true },
-    .base = .{ .is_void = true },
-    .br = .{ .is_void = true },
-    .col = .{ .is_void = true },
-    .embed = .{ .is_void = true },
-    .frame = .{ .is_void = true },
-    .hr = .{ .is_void = true },
-    .image = .{ .is_void = true },
-    .img = .{ .is_void = true },
-    .input = .{ .is_void = true },
-    .link = .{ .is_void = true },
-    .meta = .{ .is_void = true },
-    .param = .{ .is_void = true },
-    .source = .{ .is_void = true },
-    .track = .{ .is_void = true },
-    .wbr = .{ .is_void = true },
-    .iframe = .{ .is_rawtext = true },
-    .noembed = .{ .is_rawtext = true },
-    .noframes = .{ .is_rawtext = true },
+    .address = .{ .closes_p = true, .special = true },
+    .article = .{ .closes_p = true, .special = true },
+    .aside = .{ .closes_p = true, .special = true },
+    .blockquote = .{ .closes_p = true, .special = true },
+    .center = .{ .closes_p = true, .special = true },
+    .details = .{ .closes_p = true, .special = true },
+    .dialog = .{ .closes_p = true },
+    .dir = .{ .closes_p = true, .special = true },
+    .div = .{ .closes_p = true, .special = true },
+    .dl = .{ .closes_p = true, .special = true },
+    .fieldset = .{ .closes_p = true, .special = true },
+    .figcaption = .{ .closes_p = true, .special = true },
+    .figure = .{ .closes_p = true, .special = true },
+    .footer = .{ .closes_p = true, .special = true },
+    .header = .{ .closes_p = true, .special = true },
+    .hgroup = .{ .closes_p = true, .special = true },
+    .main = .{ .closes_p = true, .special = true },
+    .menu = .{ .closes_p = true, .special = true },
+    .nav = .{ .closes_p = true, .special = true },
+    .ol = .{ .closes_p = true, .special = true },
+    .search = .{ .closes_p = true, .special = true },
+    .section = .{ .closes_p = true, .special = true },
+    .summary = .{ .closes_p = true, .special = true },
+    .ul = .{ .closes_p = true, .special = true },
+    .form = .{ .closes_p = true, .special = true },
 
+    .area = .{ .void = true, .special = true },
+    .base = .{ .void = true, .special = true },
+    .br = .{ .void = true, .special = true },
+    .col = .{ .void = true, .special = true },
+    .embed = .{ .void = true, .special = true },
+    .frame = .{ .void = true, .special = true },
+    .hr = .{ .void = true, .special = true },
+    .image = .{ .void = true },
+    .img = .{ .void = true, .special = true },
+    .input = .{ .void = true, .special = true },
+    .link = .{ .void = true, .special = true },
+    .meta = .{ .void = true, .special = true },
+    .param = .{ .void = true, .special = true },
+    .source = .{ .void = true, .special = true },
+    .track = .{ .void = true, .special = true },
+    .wbr = .{ .void = true, .special = true },
+    .iframe = .{ .content_type = .rawtext, .special = true },
+    .noembed = .{ .content_type = .rawtext, .special = true },
+    .noframes = .{ .content_type = .rawtext, .special = true },
+
+    .script = .{ .ignore = true, .content_type = .rawtext, .special = true },
+    .style = .{ .ignore = true, .content_type = .rawtext, .special = true },
+    .template = .{ .ignore = true, .scope_boundary = true, .special = true },
+    .plaintext = .{ .content_type = .rawtext, .void = true, .special = true },
+    .textarea = .{ .content_type = .rcdata, .preformatted = true, .special = true },
+    .title = .{ .content_type = .rcdata, .special = true },
+    .xmp = .{ .content_type = .rawtext, .preformatted = true, .special = true },
+    .pre = .{ .preformatted = true, .closes_p = true, .special = true },
+    .listing = .{ .preformatted = true, .closes_p = true, .special = true },
+
+    .dd = .{ .end_type = .implied, .special = true },
+    .dt = .{ .end_type = .implied, .special = true },
+    .li = .{ .end_type = .implied, .special = true },
+    .optgroup = .{ .end_type = .implied },
+    .option = .{ .end_type = .implied },
+    .p = .{ .end_type = .implied, .closes_p = true, .special = true },
+    .rb = .{ .end_type = .implied },
+    .rp = .{ .end_type = .implied },
+    .rt = .{ .end_type = .implied },
+    .rtc = .{ .end_type = .implied },
+
+    .caption = .{ .end_type = .thorough, .scope_boundary = true, .special = true },
+    .colgroup = .{ .end_type = .thorough, .special = true },
+    .tbody = .{ .end_type = .thorough, .special = true },
+    .td = .{ .end_type = .thorough, .scope_boundary = true, .special = true },
+    .tfoot = .{ .end_type = .thorough, .special = true },
+    .th = .{ .end_type = .thorough, .scope_boundary = true, .special = true },
+    .thead = .{ .end_type = .thorough, .special = true },
+    .tr = .{ .end_type = .thorough, .special = true },
+
+    .mi = .{ .namespace = .math, .scope_boundary = true, .special = true },
+    .mo = .{ .namespace = .math, .scope_boundary = true, .special = true },
+    .mn = .{ .namespace = .math, .scope_boundary = true, .special = true },
+    .ms = .{ .namespace = .math, .scope_boundary = true, .special = true },
+    .mtext = .{ .namespace = .math, .scope_boundary = true, .special = true },
+    .annotation = .{ .namespace = .math },
+    .@"annotation-xml" = .{ .namespace = .math, .scope_boundary = true, .special = true },
+
+    .foreignObject = .{ .namespace = .svg, .scope_boundary = true, .special = true },
+    .desc = .{ .namespace = .svg, .scope_boundary = true, .special = true },
+    .svg_title = .{ .namespace = .svg, .scope_boundary = true, .special = true },
+
+    .applet = .{ .scope_boundary = true, .special = true },
+    .html = .{ .scope_boundary = true, .special = true },
+    .table = .{ .scope_boundary = true, .special = true },
+    .marquee = .{ .scope_boundary = true, .special = true },
+    .object = .{ .scope_boundary = true, .special = true },
+    .select = .{ .scope_boundary = true, .special = true },
+
+    .h1 = .{ .heading = true, .closes_p = true, .special = true },
+    .h2 = .{ .heading = true, .closes_p = true, .special = true },
+    .h3 = .{ .heading = true, .closes_p = true, .special = true },
+    .h4 = .{ .heading = true, .closes_p = true, .special = true },
+    .h5 = .{ .heading = true, .closes_p = true, .special = true },
+    .h6 = .{ .heading = true, .closes_p = true, .special = true },
+
+    .basefont = .{ .special = true },
+    .bgsound = .{ .special = true },
+    .body = .{ .special = true },
+    .button = .{ .special = true },
+    .frameset = .{ .special = true },
+    .head = .{ .special = true },
+    .keygen = .{ .special = true },
     // ekdy should act as if JS is disabled, therefore we treat
     // noscript and object as inline tags.
-    // .noscript = .{ .is_ignore = true, .is_rawtext = true },
-    // .object = .{ .is_ignore = true },
-
-    .script = .{ .is_ignore = true, .is_rawtext = true },
-    .style = .{ .is_ignore = true, .is_rawtext = true },
-    .template = .{ .is_ignore = true },
-    .plaintext = .{ .is_rawtext = true, .is_void = true },
-    .textarea = .{ .is_rcdata = true, .is_preformatted = true },
-    .title = .{ .is_rcdata = true },
-    .xmp = .{ .is_rawtext = true, .is_preformatted = true },
-    .pre = .{ .is_preformatted = true },
+    .noscript = .{ .special = true },
 });
 
 pub const tag_to_enum = std.StaticStringMap(Tag).initComptime(blk: {
     const fields = std.meta.fields(Tag);
     var init_vals: [fields.len]struct { []const u8, Tag } = undefined;
     for (fields, 0..) |f, i| {
-        init_vals[i] = .{ f.name, @field(Tag, f.name) };
+        // svg_title is not actually a tag name.
+        const tag = if (std.mem.eql(u8, f.name, "svg_title")) Tag.unknown else @field(Tag, f.name);
+        init_vals[i] = .{ f.name, tag };
     }
 
     break :blk init_vals;
@@ -265,6 +385,14 @@ pub const max_tag_len = blk: {
 pub fn is_valid_fs_tag_char(c: u8) bool {
     return ascii.isAlphabetic(c) or c == '!' or c == '?' or c == '/';
 }
+
+pub const StructuralDepths = struct {
+    ignore: usize = 0,
+    preformatted: usize = 0,
+    table: usize = 0,
+    svg: usize = 0,
+    math: usize = 0,
+};
 
 pub fn TextExtractor(T: type) type {
     if (!@hasDecl(T, "onText")) {
@@ -298,6 +426,12 @@ pub fn TextExtractor(T: type) type {
         /// Preformatted text omits the first character if its '\n'.
         preformatted_first: bool = false,
 
+        /// Frameset-ok flag. Allows transition to <frameset>.
+        frameset_ok: bool = true,
+
+        /// Flag for checking if from element pointer is set.
+        form_elem_ptr_set: bool = false,
+
         /// State to return back after an attribute state.
         attr_return_state: State = .tag_start_found,
 
@@ -306,11 +440,7 @@ pub fn TextExtractor(T: type) type {
 
         cursor: usize = 0,
 
-        /// Depth of ignore tags.
-        ignore_depth: usize = 0,
-
-        /// Depth of tags that output preformatted text.
-        preformatted_depth: usize = 0,
+        depths: StructuralDepths = .{},
 
         stack: ArrayList(Tag) = ArrayList(Tag).empty,
 
@@ -361,16 +491,10 @@ pub fn TextExtractor(T: type) type {
                 return props;
 
             for (&T.ignored_tags) |it| {
-                props.getPtr(it).is_ignore = true;
+                props.getPtr(it).ignore = true;
             }
 
             return props;
-        }
-
-        pub fn init(policy: *T) Self {
-            return Self{
-                .policy = policy,
-            };
         }
 
         pub fn deinit(self: *Self, allocator: Allocator) void {
@@ -393,8 +517,8 @@ pub fn TextExtractor(T: type) type {
                 .text => try self.handleText(html),
                 .decoding => try self.handleDecoding(html),
                 .tag => try self.handleTag(html),
-                .tag_start => try self.handleTagStart(allocator, html),
-                .tag_start_found => try self.handleTagStartFound(html),
+                .tag_start => self.handleTagStart(html),
+                .tag_start_found => try self.handleTagStartFound(allocator, html),
                 .tag_end => self.handleTagEnd(html),
                 .tag_end_found => try self.handleTagEndFound(html),
                 .attr_key => self.handleAttrKey(html),
@@ -509,7 +633,7 @@ pub fn TextExtractor(T: type) type {
             }) {
                 const c = html[consumed];
                 if (c == '<') {
-                    if (tag == null or (!tag_prop.?.is_rawtext and !tag_prop.?.is_rcdata)) {
+                    if (tag == null or tag_prop.?.content_type == .normal) {
                         try self.emitText(html[start..consumed], tag);
                         self.state = State.tag;
                         // Also consume the <.
@@ -537,7 +661,7 @@ pub fn TextExtractor(T: type) type {
                 } else if (c == 0) {
                     try self.emitText(html[start..consumed], tag);
                     start = consumed + 1;
-                } else if (c == '&' and (tag == null or !tag_prop.?.is_rawtext)) {
+                } else if (c == '&' and (tag == null or tag_prop.?.content_type != .rawtext)) {
                     try self.emitText(html[start..consumed], tag);
                     self.state = State.decoding;
                     return .{ .consumed = consumed + 1 };
@@ -554,19 +678,19 @@ pub fn TextExtractor(T: type) type {
         }
 
         fn handleWhitespace(self: *Self, whitespace: u8) T.Error!void {
-            if (self.preformatted_depth == 0) {
-                if (!self.last_br and self.ignore_depth == 0)
+            if (self.depths.preformatted == 0) {
+                if (!self.last_br and self.depths.ignore == 0)
                     self.queueWhitespace(.space);
                 return;
             }
 
             if (self.preformatted_first) {
                 self.preformatted_first = false;
-                if (whitespace != '\n' and whitespace != '\r' and self.ignore_depth == 0)
+                if (whitespace != '\n' and whitespace != '\r' and self.depths.ignore == 0)
                     try self.policy.onText((&whitespace)[0..1]);
             } else {
                 const c_out = if (whitespace == '\r') '\n' else whitespace;
-                if (self.ignore_depth == 0)
+                if (self.depths.ignore == 0)
                     try self.policy.onText((&c_out)[0..1]);
             }
         }
@@ -577,7 +701,7 @@ pub fn TextExtractor(T: type) type {
             tag: ?Tag,
         ) T.Error!void {
             if (text.len == 0 or
-                self.ignore_depth > 0 or
+                self.depths.ignore > 0 or
                 (tag != null and tag.? == .math))
             {
                 return;
@@ -683,12 +807,199 @@ pub fn TextExtractor(T: type) type {
 
         fn resolveTag(self: *Self) Tag {
             if (self.tag_buffer_overflow) return Tag.unknown;
-            return tag_to_enum.get(self.tag_buffer[0..self.tag_buffer_len]) orelse Tag.unknown;
+
+            const maybe_tag = tag_to_enum.get(self.tag_buffer[0..self.tag_buffer_len]);
+            if (maybe_tag == null) return Tag.unknown;
+
+            const tag = maybe_tag.?;
+            const tp = tag_properties.get(tag);
+
+            if (tp.namespace == .math and self.depths.math == 0) return Tag.unknown;
+            if (tp.namespace == .svg and self.depths.svg == 0) return Tag.unknown;
+            if (tag == .title and self.depths.svg > 0) return Tag.svg_title;
+
+            return tag;
+        }
+
+        const Scope = enum(u3) {
+            stack,
+            scope,
+            list_item,
+            button,
+            table,
+        };
+
+        fn inScope(self: *Self, tag: Tag, scope: Scope) bool {
+            var it = std.mem.reverseIterator(self.stack.items);
+            while (it.next()) |st_tag| {
+                const st_tp = tag_properties.get(st_tag);
+                switch (scope) {
+                    .stack => {},
+                    .scope => {
+                        if (st_tp.scope_boundary)
+                            return false;
+                    },
+                    .list_item => {
+                        if (st_tp.scope_boundary or st_tag == .ol or st_tag == .ul)
+                            return false;
+                    },
+                    .button => {
+                        if (st_tp.scope_boundary or st_tag == .button)
+                            return false;
+                    },
+                    .table => {
+                        if (st_tag == .html or st_tag == .table or st_tag == .template)
+                            return false;
+                    },
+                }
+
+                if (st_tag != .unknown and st_tag == tag)
+                    return true;
+            }
+
+            return false;
+        }
+
+        fn insertElement(self: *Self, tag: Tag, allocator: Allocator) Allocator.Error!void {
+            try self.stack.append(allocator, tag);
+            if (tag_properties.get(tag).ignore)
+                self.depths.ignore += 1;
+
+            if (tag_properties.get(tag).preformatted) {
+                self.depths.preformatted += 1;
+                // Only xmp does not cause first new line to be skipped.
+                if (self.depths.preformatted == 1 and tag != .xmp)
+                    self.preformatted_first = true;
+            }
+
+            if (tag == .table) {
+                self.depths.table += 1;
+            } else if (tag == .svg) {
+                self.depths.svg += 1;
+            } else if (tag == .math) {
+                self.depths.math += 1;
+            }
+        }
+
+        /// Pop the stack until pos (including it) starting from top.
+        fn popUntil(self: *Self, pos: usize) T.Error!void {
+            var i = self.stack.items.len;
+            while (i > pos) : (i -= 1) {
+                try self.closeTag(self.stack.items[i - 1]);
+            }
+
+            try self.closeTag(self.stack.items[pos]);
+            self.stack.items.len = pos;
+        }
+
+        /// Close a <p> and everything in between if there is one in
+        /// the button scope.
+        fn pCloseButtonScope(self: *Self) T.Error!void {
+            var i: usize = self.stack.items.len;
+            while (i > 0) : (i -= 1) {
+                const tag = self.stack.items[i - 1];
+                const tp = tag_properties.get(tag);
+                if (tp.scope_boundary or tag == .button)
+                    return;
+
+                if (tag == .p) {
+                    try self.popUntil(i - 1);
+                    return;
+                }
+            }
+        }
+
+        /// Closes a previously open peer element by walking the stack
+        /// from top to bottom. If a matching peer tag is found, pops
+        /// all elements from the top of the stack down to and
+        /// including the peer, emitting close events for each. The
+        /// walk stops without closing if a Special-category element
+        /// is encountered, except for `address`, `div`, and `p` which
+        /// are transparent to the walk. Used for `li` (peers: `li`),
+        /// `dd` and `dt` (peers: `dd`, `dt`). Ref: WHATWG §13.2.6.4.7
+        /// "in body" — start tags "li", "dd", "dt".
+        fn closePrevPeer(self: *Self, peer_tags: []const Tag) T.Error!void {
+            var i = self.stack.items.len;
+            while (i > 0) : (i -= 1) {
+                const st_tag = self.stack.items[i - 1];
+                if (std.mem.findScalar(Tag, peer_tags, st_tag) != null) {
+                    try self.popUntil(i - 1);
+                    break;
+                }
+
+                const tp = tag_properties.get(st_tag);
+                if (tp.special and st_tag != .address and st_tag != .div and st_tag != .p)
+                    break;
+            }
+        }
+
+        /// Process a tag start in body. Implements
+        /// https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody.
+        /// Returns true if 'tag' is processed i.e. pushed to stack.
+        fn processModeBodyStartTag(self: *Self, tag: Tag, allocator: Allocator) Error!bool {
+            const tp = tag_properties.get(tag);
+            if (tag == .body) {
+                self.frameset_ok = false;
+                if (!self.inScope(tag, .scope))
+                    try self.insertElement(tag, allocator);
+            } else if (tag == .frameset) {
+                if (self.frameset_ok) {
+                    try self.insertElement(tag, allocator);
+                } else {
+                    return false;
+                }
+            } else if (tag == .form) {
+                const temp_in_stack = self.inScope(.template, .stack);
+                if (self.form_elem_ptr_set and temp_in_stack)
+                    return false;
+
+                try self.pCloseButtonScope();
+                try self.insertElement(tag, allocator);
+
+                // NOTE: We don't need to check if <template> is in
+                // the stack again after pCloseButtonScope might have
+                // changed the stack, because <template> is scope
+                // boundary therefore it could not have been popped.
+                if (!temp_in_stack)
+                    self.form_elem_ptr_set = true;
+            } else if (tp.closes_p) {
+                try self.pCloseButtonScope();
+                if (tp.heading) {
+                    if (self.stack.getLastOrNull()) |curr_tag| {
+                        if (tag_properties.get(curr_tag).heading) {
+                            _ = self.stack.pop();
+                            try self.closeTag(curr_tag);
+                        }
+                    }
+                }
+
+                try self.insertElement(tag, allocator);
+                if (tag == .pre or tag == .listing)
+                    self.frameset_ok = false;
+            } else if (tag == .li or tag == .dd or tag == .dt) {
+                self.frameset_ok = false;
+                try self.closePrevPeer(if (tag == .li) &.{.li} else &.{ .dd, .dt });
+                try self.pCloseButtonScope();
+                try self.insertElement(tag, allocator);
+            } else if (tag == .plaintext) {
+                try self.pCloseButtonScope();
+                try self.insertElement(tag, allocator);
+            } else {
+                try self.insertElement(tag, allocator);
+            }
+
+            // br is forced line break..
+            if (tag == .br) {
+                try self.policy.onText("\n");
+                self.last_br = true;
+            }
+
+            return true;
         }
 
         //<strong>ekdy...</strong>
         // ^~~~~
-        fn handleTagStart(self: *Self, allocator: Allocator, html: []const u8) Error!ParseStep {
+        fn handleTagStart(self: *Self, html: []const u8) ParseStep {
             // Handle comments below if tag has not started
             if (self.tag_buffer_len == 0) {
                 const comment_match = forwardMatch("!--", html);
@@ -709,40 +1020,6 @@ pub fn TextExtractor(T: type) type {
 
             // Tag name ends in this block
             if (ascii.isWhitespace(c) or c == '>' or c == '/') {
-                defer {
-                    self.tag_buffer_len = 0;
-                    self.tag_buffer_overflow = false;
-                }
-
-                var tag = self.resolveTag();
-
-                // frameset is special. Its only a valid tag if no
-                // text has been written before which in that case no
-                // text can be emitted afterwards. Otherwise, we map
-                // it to unknown to process it inline.
-                if (tag == .frameset) {
-                    if (!self.any_text) {
-                        self.state = .frameset;
-                        return .{ .consumed = html.len };
-                    }
-                    tag = .unknown;
-                }
-
-                // br is forced line break..
-                if (tag == .br) {
-                    try self.policy.onText("\n");
-                    self.last_br = true;
-                }
-
-                try self.stack.append(allocator, tag);
-                if (tag_properties.get(tag).is_ignore)
-                    self.ignore_depth += 1;
-
-                if (tag_properties.get(tag).is_preformatted) {
-                    self.preformatted_depth += 1;
-                    if (self.preformatted_depth == 1) self.preformatted_first = true;
-                }
-
                 self.state = State.tag_start_found;
                 return .{ .consumed = if (ascii.isWhitespace(c)) 1 else 0 };
             }
@@ -763,35 +1040,53 @@ pub fn TextExtractor(T: type) type {
 
         //<strong >ekdy...</strong>
         //       ^~
-        fn handleTagStartFound(self: *Self, html: []const u8) T.Error!ParseStep {
-            const tag = self.stack.getLast();
+        fn handleTagStartFound(
+            self: *Self,
+            allocator: Allocator,
+            html: []const u8,
+        ) Error!ParseStep {
+            const c = html[0];
+            if (ascii.isWhitespace(c) or c == '/')
+                return .{ .consumed = 1 };
+
+            if (c != '>') {
+                self.attr_return_state = State.tag_start_found;
+                self.state = State.attr_key;
+                return .{ .consumed = 0 };
+            }
+
+            defer {
+                self.tag_buffer_len = 0;
+                self.tag_buffer_overflow = false;
+            }
+            const tag = self.resolveTag();
+            const inserted = try if (self.depths.svg > 0 or self.depths.math > 0)
+                self.processModeBodyStartTag(tag, allocator)
+            else if (self.depths.table > 0)
+                self.processModeBodyStartTag(tag, allocator)
+            else
+                self.processModeBodyStartTag(tag, allocator);
+
+            if (!inserted)
+                return .{ .consumed = 1 };
 
             if (@hasDecl(T, "onTagStart")) {
-                if (try self.policy.onTagStart(tag, self.ignore_depth > 0)) |ws| {
+                if (try self.policy.onTagStart(tag, self.depths.table)) |ws| {
                     self.queueWhitespace(ws);
                 }
             }
 
-            const c = html[0];
-            if (ascii.isWhitespace(c)) return .{ .consumed = 1 };
-            if (c == '/') {
-                self.state = State.tag_end_found;
-                return .{ .consumed = 1 };
-            }
+            self.state = switch (tag) {
+                .script => State.script,
+                .frameset => State.frameset,
+                .plaintext => State.plaintext,
+                else => State.text,
+            };
 
-            if (c == '>') {
-                if (tag_properties.get(tag).is_void) {
-                    self.state = State.tag_end_found;
-                    return .{ .consumed = 0 };
-                }
+            if (tag_properties.get(tag).void)
+                _ = self.stack.pop();
 
-                self.state = if (tag == .script) State.script else State.text;
-                return .{ .consumed = 1 };
-            }
-
-            self.attr_return_state = State.tag_start_found;
-            self.state = State.attr_key;
-            return .{ .consumed = 0 };
+            return .{ .consumed = 1 };
         }
 
         //<strong >ekdy...</strong>
@@ -807,27 +1102,59 @@ pub fn TextExtractor(T: type) type {
             return .{ .consumed = 1 };
         }
 
-        fn popUntilMatching(self: *Self, end_tag: Tag) bool {
-            var found_idx = self.stack.items.len;
-            while (found_idx > 0) : (found_idx -= 1) {
-                if (end_tag == self.stack.items[found_idx - 1]) {
-                    for (self.stack.items[found_idx - 1 ..]) |pop_tag| {
-                        const tp = tag_properties.get(pop_tag);
-                        if (tp.is_ignore)
-                            self.ignore_depth -|= 1;
-
-                        if (tp.is_preformatted) {
-                            self.preformatted_depth -|= 1;
-                            if (self.preformatted_depth == 0) self.preformatted_first = false;
-                        }
-                    }
-
-                    self.stack.items.len = found_idx - 1;
-                    return true;
+        fn closeTag(self: *Self, tag: Tag) T.Error!void {
+            if (@hasDecl(T, "onTagEnd")) {
+                const ws = try self.policy.onTagEnd(tag, self.depths.table);
+                if (ws != null) {
+                    self.queueWhitespace(ws.?);
                 }
             }
 
-            return false;
+            const tp = tag_properties.get(tag);
+            if (tp.ignore)
+                self.depths.ignore -|= 1;
+
+            if (tp.preformatted) {
+                self.depths.preformatted -|= 1;
+                if (self.depths.preformatted == 0) self.preformatted_first = false;
+            }
+
+            if (tag == .table) {
+                self.depths.table -|= 1;
+            } else if (tag == .svg) {
+                self.depths.svg -|= 1;
+            } else if (tag == .math) {
+                self.depths.math -|= 1;
+            }
+        }
+
+        /// Closes implied tags.
+        fn generate_implied(self: *Self, thorough: bool) T.Error!void {
+            var new_length = self.stack.items.len;
+            while (new_length > 0) : (new_length -= 1) {
+                const tag = self.stack.items[new_length - 1];
+                const tp = tag_properties.get(tag);
+                if (!tp.implied_end and (!thorough or !tp.implied_end_thorough))
+                    break;
+
+                try self.closeTag(tag);
+            }
+
+            self.stack.items.len = new_length;
+        }
+
+        fn popUntilMatching(self: *Self, end_tag: Tag) T.Error!void {
+            var found_idx = self.stack.items.len;
+            while (found_idx > 0) : (found_idx -= 1) {
+                if (end_tag == self.stack.items[found_idx - 1]) {
+                    for (self.stack.items[found_idx - 1 ..]) |tag| {
+                        try self.closeTag(tag);
+                    }
+
+                    self.stack.items.len = found_idx - 1;
+                    return;
+                }
+            }
         }
 
         //<strong >ekdy...</strong >
@@ -847,30 +1174,7 @@ pub fn TextExtractor(T: type) type {
                 self.tag_buffer_len = 0;
                 self.tag_buffer_overflow = false;
             }
-
-            if (self.stack.getLastOrNull()) |tag| {
-                // plaintext is a special tag.
-                if (tag == .plaintext) {
-                    self.state = .plaintext;
-                    return .{ .consumed = 1 };
-                }
-
-                // Non void tag, or tag that does not end with /.
-                if (self.tag_buffer_len > 0) {
-                    const end_tag = self.resolveTag();
-                    const match = self.popUntilMatching(end_tag);
-                    if (@hasDecl(T, "onTagEnd")) {
-                        const ws = try self.policy.onTagEnd(end_tag, self.ignore_depth > 0);
-                        if (ws != null and match) {
-                            self.queueWhitespace(ws.?);
-                        }
-                    }
-                } else {
-                    // Tag buffer is empty if it's void tag, just pop it.
-                    _ = self.stack.pop();
-                }
-            }
-
+            try self.popUntilMatching(self.resolveTag());
             self.state = State.text;
             return .{ .consumed = 1 };
         }
@@ -1067,7 +1371,7 @@ pub fn TextExtractor(T: type) type {
                 unreachable;
 
             self.state = .text;
-            self.ignore_depth -|= 1;
+            self.depths.ignore -|= 1;
         }
 
         // <script>ekdy...</script>
@@ -1170,7 +1474,7 @@ fn expectConvert(expected: []const u8, html_text: []const u8) !void {
     const InnerText = @import("policy/InnerText.zig");
     var policy = InnerText{ .writer = &allocating.writer };
     const InnerTextExtractor = TextExtractor(InnerText);
-    var extractor = InnerTextExtractor.init(&policy);
+    var extractor = InnerTextExtractor{ .policy = &policy };
     defer extractor.deinit(talloc);
 
     // Check as a single payload.
@@ -1179,7 +1483,8 @@ fn expectConvert(expected: []const u8, html_text: []const u8) !void {
     const single_shot_res = std.testing.expectEqualStrings(expected, allocating.written());
 
     allocating.clearRetainingCapacity();
-    var stream_extractor = InnerTextExtractor.init(&policy);
+    var stream_policy = InnerText{ .writer = &allocating.writer };
+    var stream_extractor = InnerTextExtractor{ .policy = &stream_policy };
     defer stream_extractor.deinit(talloc);
 
     // Check streaming 1 character at a time.
@@ -1479,6 +1784,7 @@ fn expectHTML5(
 }
 
 test "html5lib_tests1" {
+    // 32: Table foster parenting.
     // 34: <select> without <option> or <optgroup>
     // 75: Most likely adoption rules are fixing the tree.
     // 77-79: <table> foster parenting.
@@ -1486,9 +1792,10 @@ test "html5lib_tests1" {
     try expectHTML5(
         "tests1.ekdytest",
         &.{
-            .{ 34, "A\nB\nCD\nE" },   .{ 75, "abc def ghi\n\njkl mno pqr stu" },
-            .{ 77, "ababr\nx\naoe" }, .{ 78, "aba\nbrx\naoe" },
-            .{ 79, "aba\nbrx\naoe" }, .{ 86, "X" },
+            .{ 32, "helloexcite!me!please!" },         .{ 34, "A\nB\nCD\nE" },
+            .{ 75, "abc def ghi\n\njkl mno pqr stu" }, .{ 77, "ababr\nx\naoe" },
+            .{ 78, "aba\nbrx\naoe" },
+            .{ 79, "aba\nbrx\naoe" }, // .{ 86, "X" },
         },
     );
 }
@@ -1796,7 +2103,8 @@ test "html5lib_webkit02" {
     // 20: <svg> parsing does not recognize <title> tag inside.
     // 37-38: <select> and <option> parsing.
     try expectHTML5("webkit02.ekdytest", &.{
-        .{ 19, "</foreignObject></svg><div>bar</div>" }, .{ 20, "" },
-        .{ 37, "div 1\nbutton\ndiv 2\ndiv 3" },          .{ 38, "button" },
+        // .{ 19, "</foreignObject></svg><div>bar</div>" },
+        // .{ 20, "" },
+        .{ 37, "div 1\nbutton\ndiv 2\ndiv 3" }, .{ 38, "button" },
     });
 }

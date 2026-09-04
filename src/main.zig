@@ -19,7 +19,7 @@ pub fn main(init: std.process.Init) !void {
     const stdout = &stdout_writer.interface;
 
     var policy = InnerText{ .writer = stdout };
-    var extractor = ekdy.html.TextExtractor(InnerText).init(&policy);
+    var extractor = ekdy.html.TextExtractor(InnerText){ .policy = &policy };
     defer extractor.deinit(allocator);
 
     while (stdin.fillMore()) {
